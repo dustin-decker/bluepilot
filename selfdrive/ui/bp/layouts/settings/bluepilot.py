@@ -1,3 +1,5 @@
+import json
+
 import pyray as rl
 
 from openpilot.common.params import Params
@@ -86,6 +88,7 @@ class BluePilotLayout(Widget):
       ("BPRadRacerTheme", self._rad_racer_theme),
       ("BPRainbowLines", self._rainbow_lane_lines),
       ("ShowBlindspotOverlay", self._show_blindspot),
+      ("VASMEnabled", self._vasm_enabled),
       ("ShowBrakeStatus", self._show_brake_status),
       ("BPHideOnroadBorder", self._hide_onroad_border),
       ("BPShowConfidenceBall", self._show_confidence_ball),
@@ -176,6 +179,39 @@ class BluePilotLayout(Widget):
       initial_state=self._safe_get_bool(self._params, "ShowBlindspotOverlay"),
       callback=lambda state: self._toggle_callback(state, "ShowBlindspotOverlay"),
       icon="warning.png"
+    )
+
+    # Vision-based supplemental blindspot monitoring. Camera annotation is
+    # intentionally performed in the BluePilot Portal, where a full-resolution
+    # driver-camera snapshot is available.
+    self._vasm_enabled = toggle_item(
+      lambda: tr("Vision Adjacent Spot Monitoring"),
+      lambda: tr("Supplement factory blindspot signals using the driver camera. Configure window regions at http://device-ip:8088/vasm while parked."),
+      initial_state=self._safe_get_bool(self._params, "VASMEnabled"),
+      callback=lambda state: self._toggle_callback(state, "VASMEnabled"),
+      enabled=self._has_vasm_annotation,
+      icon="warning.png"
+    )
+    self._vasm_confidence = float_control_item(
+      lambda: tr("Vision Detection Confidence"),
+      lambda: tr("Minimum model confidence required to report a vehicle in an annotated region."),
+      param="VASMConfidenceThreshold",
+      min_value=0.25,
+      max_value=1.0,
+      step=0.05,
+      enabled=lambda: self._has_vasm_annotation() and self._safe_get_bool(self._params, "VASMEnabled"),
+      icon="warning.png"
+    )
+    self._vasm_smoothing = float_control_item(
+      lambda: tr("Vision Detection Smoothing"),
+      lambda: tr("How long a vision detection remains active, in seconds."),
+      param="VASMSmoothSeconds",
+      min_value=0.1,
+      max_value=0.5,
+      step=0.05,
+      enabled=lambda: self._has_vasm_annotation() and self._safe_get_bool(self._params, "VASMEnabled"),
+      icon="warning.png",
+      suffix="s"
     )
 
     # Brake status toggle
@@ -758,6 +794,9 @@ class BluePilotLayout(Widget):
         self._rad_racer_theme,
         self._rainbow_lane_lines,
         self._show_blindspot,
+        self._vasm_enabled,
+        self._vasm_confidence,
+        self._vasm_smoothing,
         self._show_brake_status,
         self._show_confidence_ball,
         self._animate_steering_wheel,
@@ -785,6 +824,19 @@ class BluePilotLayout(Widget):
       return float(self._params.get(param, return_default=True))
     except (TypeError, ValueError):
       return default
+
+  def _has_vasm_annotation(self) -> bool:
+    raw_config = self._safe_get(self._params, "VASMAnnotationConfig", {})
+    if isinstance(raw_config, bytes):
+      raw_config = raw_config.decode("utf-8", errors="replace")
+    if isinstance(raw_config, str):
+      try:
+        raw_config = json.loads(raw_config)
+      except (TypeError, ValueError):
+        return False
+    return isinstance(raw_config, dict) and (
+      len(raw_config.get("poly_left", [])) >= 3 or len(raw_config.get("poly_right", [])) >= 3
+    )
 
   def _toggle_callback(self, state: bool, param: str):
     """Handle toggle state changes."""
@@ -909,6 +961,11 @@ class BluePilotLayout(Widget):
     )
 
     # Update button enabled states
+    vasm_configured = self._has_vasm_annotation()
+    vasm_enabled = fresh.get("VASMEnabled", self._safe_get_bool(ui_state.params, "VASMEnabled"))
+    self._vasm_enabled.action_item.set_enabled(vasm_configured)
+    self._vasm_confidence.action_item.set_enabled(vasm_configured and vasm_enabled)
+    self._vasm_smoothing.action_item.set_enabled(vasm_configured and vasm_enabled)
     self._radar_overlay_size_btn.action_item.set_enabled(self._safe_get_bool(ui_state.params, "FordPrefShowRadarLeadOverlay"))
     try:
       overlay_idx = int(self._safe_get(ui_state.params, "FordPrefRadarOverlaySize") or 1)

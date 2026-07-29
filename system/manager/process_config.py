@@ -196,9 +196,14 @@ if is_bluepilot():
     return params.get_bool("EnableWebRoutesServer")
   def _bp_route_preprocessor_enabled(started, params, CP):
     return params.get_bool("EnableWebRoutesServer") and only_offroad(started, params, CP)
+  # BluePilot: V-ASM is opt-in and only consumes the driver-camera stream onroad.
+  def _bp_vasm_enabled(started, params, CP):
+    return started and params.get_bool("VASMEnabled")
+  # End BluePilot
   procs += [
     PythonProcess("bp_portal", "bluepilot.backend.bp_portal", _bp_portal_enabled),
     PythonProcess("bp_route_preprocessor", "bluepilot.backend.routes.preprocessor", _bp_route_preprocessor_enabled),
+    PythonProcess("adj_spot_monitor_vision", "bluepilot.vision.vasm", _bp_vasm_enabled),
   ]
 
 if os.path.exists("./github_runner.sh"):

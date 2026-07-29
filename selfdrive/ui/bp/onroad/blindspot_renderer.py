@@ -7,6 +7,7 @@ from openpilot.common.params_pyx import UnknownKeyName
 from openpilot.selfdrive.ui.ui_state import ui_state
 from openpilot.system.ui.lib.application import gui_app
 from openpilot.selfdrive.ui.bp.lib.ui_debug_logger import bp_ui_log
+from openpilot.bluepilot.vision.vision_bsm import VisionBSMCombiner
 
 
 class BlindspotRendererMixin:
@@ -22,6 +23,7 @@ class BlindspotRendererMixin:
     self._blindspot_left_alpha_filter = FirstOrderFilter(0.0, 0.15, 1 / gui_app.target_fps)
     self._blindspot_right_alpha_filter = FirstOrderFilter(0.0, 0.15, 1 / gui_app.target_fps)
     self._blindspot_pulse_start_time = time.monotonic()
+    self._vision_bsm = VisionBSMCombiner(self._blindspot_params)
     # BluePilot: Cache param to avoid per-frame disk I/O (refresh every ~60 frames)
     self._blindspot_param_counter = 0
     try:
@@ -52,8 +54,9 @@ class BlindspotRendererMixin:
     car_state = sm['carState']
     bp_ui_log.state("Blindspot", "left", car_state.leftBlindspot)
     bp_ui_log.state("Blindspot", "right", car_state.rightBlindspot)
-    left_blindspot = car_state.leftBlindspot
-    right_blindspot = car_state.rightBlindspot
+    left_blindspot, right_blindspot = self._vision_bsm.combined_state(
+      car_state.leftBlindspot, car_state.rightBlindspot,
+    )
 
     # Update alpha filters for smooth fade in/out
     self._blindspot_left_alpha_filter.update(1.0 if left_blindspot else 0.0)

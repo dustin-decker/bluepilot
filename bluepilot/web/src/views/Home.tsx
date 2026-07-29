@@ -325,6 +325,20 @@ export const Home = ({ deviceStatus = 'checking' }: HomeProps) => {
                   <span className="subtext">View live system logs</span>
                 </div>
               </button>
+              <button
+                className={`quick-link-card vasm ${deviceStatus === 'onroad' ? 'disabled' : ''}`}
+                onClick={() => deviceStatus !== 'onroad' && navigate('/vasm')}
+                disabled={deviceStatus === 'onroad'}
+                title={deviceStatus === 'onroad' ? 'V-ASM configuration unavailable while driving' : undefined}
+              >
+                <div className="quick-link-icon">
+                  <Icon name="visibility" />
+                </div>
+                <div className="quick-link-copy">
+                  <span className="label">V-ASM</span>
+                  <span className="subtext">Trace blind-spot windows</span>
+                </div>
+              </button>
             </div>
           </section>
 
