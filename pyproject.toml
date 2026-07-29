@@ -25,6 +25,10 @@ dependencies = [
   "setuptools",
   "numpy >=2.0",
 
+  # BluePilot: V-ASM uses OpenCV DNN and NV12 image processing at runtime.
+  "opencv-python-headless",
+  # End BluePilot
+
   # vendored native dependencies
   "bzip2 @ git+https://github.com/commaai/dependencies.git@release-bzip2#subdirectory=bzip2",
   "bootstrap-icons @ git+https://github.com/commaai/dependencies.git@release-bootstrap-icons#subdirectory=bootstrap-icons",
@@ -104,7 +108,6 @@ testing = [
 
 dev = [
   "matplotlib",
-  "opencv-python-headless",
 ]
 
 tools = [
