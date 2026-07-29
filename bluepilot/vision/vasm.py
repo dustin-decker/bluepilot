@@ -16,6 +16,7 @@ from openpilot.common.params import Params
 from openpilot.common.realtime import set_core_affinity, Ratekeeper
 from openpilot.system.hardware import PC
 from openpilot.bluepilot.vision.cpu_throttle import device_cpu_throttle_factor
+from openpilot.bluepilot.vision.memory_params import create_memory_params
 from openpilot.bluepilot.vision.vasm_inference import VASMInference, V_ASM_MODEL_PATH
 
 V_ASM_SOLO_AFFINITY_CORES = [0, 1, 2]
@@ -34,7 +35,7 @@ class VASMDaemon:
     from msgq.visionipc import VisionIpcClient, VisionStreamType
 
     self.params = Params()
-    self.params_memory = Params(memory=True)
+    self.params_memory = create_memory_params(self.params)
     self.sm = messaging.SubMaster(["deviceState", "carState"])
 
     self.VisionIpcClient = VisionIpcClient

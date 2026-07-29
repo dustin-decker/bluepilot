@@ -5,6 +5,7 @@ from __future__ import annotations
 import time
 
 from openpilot.common.params import Params
+from openpilot.bluepilot.vision.memory_params import create_memory_params
 
 
 VASM_STATE_TIMEOUT_SECONDS = 3.0
@@ -32,7 +33,7 @@ class VisionBSMCombiner:
 
   def __init__(self, params: Params | None = None, params_memory: Params | None = None):
     self.params = params or Params()
-    self.params_memory = params_memory or Params(memory=True)
+    self.params_memory = params_memory or create_memory_params(self.params)
     self._enabled = False
     self._last_enabled_refresh = -float("inf")
 
