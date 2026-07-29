@@ -15,17 +15,20 @@ class TestSyncPythonEnv:
   whenever the checked-out uv.lock differs from what the venv was last synced against.
   """
 
-  def _run(self, mocker, tmp_path, lock_bytes=b"lock-v1", marker_text=None, uv_found=True):
+  def _run(self, mocker, tmp_path, lock_bytes=b"lock-v1", marker_text=None, uv_found=True, active_venv=None):
     lock = tmp_path / "uv.lock"
     if lock_bytes is not None:
       lock.write_bytes(lock_bytes)
-    marker = tmp_path / ".venv" / ".op_synced_lock"
+    project_venv = tmp_path / ".venv"
+    marker = (active_venv or project_venv) / ".op_synced_lock"
     if marker_text is not None:
       marker.parent.mkdir(parents=True, exist_ok=True)
       marker.write_text(marker_text)
 
     calls: list[list[str]] = []
-    mocker.patch.multiple(build, UV_LOCK=str(lock), SYNC_MARKER=str(marker))
+    mocker.patch.multiple(build, UV_LOCK=str(lock), PROJECT_VENV=str(project_venv),
+                          SYNC_MARKER=str(project_venv / ".op_synced_lock"))
+    mocker.patch.object(build, "_active_venv", return_value=str(active_venv) if active_venv else None)
     mocker.patch.object(build.shutil, "which", return_value="/usr/bin/uv" if uv_found else None)
     mocker.patch.object(build.os.path, "exists", return_value=uv_found)
     mocker.patch.object(build.subprocess, "run", side_effect=lambda cmd, **kw: calls.append(cmd))
@@ -46,6 +49,12 @@ class TestSyncPythonEnv:
   def test_changed_lock_triggers_resync(self, mocker, tmp_path):
     marker, calls = self._run(mocker, tmp_path, marker_text=hashlib.sha256(b"OLD").hexdigest())
     assert len(calls) == 1
+    assert marker.read_text().strip() == DIGEST_V1
+
+  def test_prebuilt_device_syncs_active_venv(self, mocker, tmp_path):
+    marker, calls = self._run(mocker, tmp_path, active_venv=tmp_path / "active-venv")
+
+    assert calls == [["/usr/bin/uv", "sync", "--frozen", "--inexact", "--active"]]
     assert marker.read_text().strip() == DIGEST_V1
 
   def test_missing_lockfile_is_noop(self, mocker, tmp_path):

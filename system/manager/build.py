@@ -15,7 +15,18 @@ from openpilot.system.hardware import HARDWARE, AGNOS
 # When an update adds a Python dependency (e.g. acados), the stale venv is missing it and
 # scons dies importing it. Re-sync the venv whenever the checked-out uv.lock changes.
 UV_LOCK = os.path.join(BASEDIR, "uv.lock")
+PROJECT_VENV = os.path.join(BASEDIR, ".venv")
 SYNC_MARKER = os.path.join(BASEDIR, ".venv", ".op_synced_lock")
+
+
+# BluePilot: prebuilt C3X installs run from /usr/local/venv rather than a
+# project-local .venv. Target it when converting a prebuilt install to source.
+def _active_venv() -> str | None:
+  active_venv = os.getenv("VIRTUAL_ENV")
+  if active_venv and os.path.isfile(os.path.join(active_venv, "bin", "python")):
+    return active_venv
+  return None
+# End BluePilot
 
 
 def _uv_lock_digest() -> str | None:
@@ -33,8 +44,13 @@ def sync_python_env() -> None:
   if digest is None:
     return
 
+  # BluePilot: uv otherwise rejects an invalid/stale project .venv even though
+  # the device has a valid active environment at /usr/local/venv.
+  active_venv = _active_venv()
+  sync_marker = os.path.join(active_venv, ".op_synced_lock") if active_venv else SYNC_MARKER
+
   try:
-    with open(SYNC_MARKER) as f:
+    with open(sync_marker) as f:
       if f.read().strip() == digest:
         return
   except FileNotFoundError:
@@ -47,11 +63,15 @@ def sync_python_env() -> None:
 
   # --frozen: install exactly what uv.lock pins, no re-resolution.
   # --inexact: only add missing packages, never remove extras (won't clobber a dev's env).
-  subprocess.run([uv, "sync", "--frozen", "--inexact"], cwd=BASEDIR, check=True)
+  sync_cmd = [uv, "sync", "--frozen", "--inexact"]
+  if active_venv and os.path.realpath(active_venv) != os.path.realpath(PROJECT_VENV):
+    sync_cmd.append("--active")
+  subprocess.run(sync_cmd, cwd=BASEDIR, check=True)
 
-  os.makedirs(os.path.dirname(SYNC_MARKER), exist_ok=True)
-  with open(SYNC_MARKER, "w") as f:
+  os.makedirs(os.path.dirname(sync_marker), exist_ok=True)
+  with open(sync_marker, "w") as f:
     f.write(digest)
+  # End BluePilot
 
 
 def build() -> None:
