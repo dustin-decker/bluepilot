@@ -18,21 +18,28 @@ class TestSyncPythonEnv:
   """
 
   def _run(self, mocker, tmp_path, lock_bytes=b"lock-v1", marker_text=None, uv_found=True,
-           active_venv=None, agnos=False, root_readonly=False, venv_on_root=False):
+           active_venv=None, agnos=False, root_readonly=False, venv_on_root=False,
+           legacy_marker_text=None):
     lock = tmp_path / "uv.lock"
     if lock_bytes is not None:
       lock.write_bytes(lock_bytes)
     project_venv = tmp_path / ".venv"
-    marker = (active_venv or project_venv) / ".op_synced_lock"
+    device_cache = tmp_path / "uv-cache"
+    root_active_venv = bool(agnos and active_venv and venv_on_root)
+    marker = (device_cache if root_active_venv else (active_venv or project_venv)) / ".op_synced_lock"
     if marker_text is not None:
       marker.parent.mkdir(parents=True, exist_ok=True)
       marker.write_text(marker_text)
+    if legacy_marker_text is not None:
+      legacy_marker = active_venv / ".op_synced_lock"
+      legacy_marker.parent.mkdir(parents=True, exist_ok=True)
+      legacy_marker.write_text(legacy_marker_text)
 
     calls: list[list[str]] = []
     call_kwargs: list[dict] = []
     mocker.patch.multiple(build, UV_LOCK=str(lock), PROJECT_VENV=str(project_venv),
                           SYNC_MARKER=str(project_venv / ".op_synced_lock"),
-                          DEVICE_UV_CACHE_DIR=str(tmp_path / "uv-cache"), AGNOS=agnos)
+                          DEVICE_UV_CACHE_DIR=str(device_cache), AGNOS=agnos)
     mocker.patch.object(build, "_active_venv", return_value=str(active_venv) if active_venv else None)
     mocker.patch.object(build, "_root_readonly", return_value=root_readonly)
     mocker.patch.object(build, "_venv_on_root", return_value=venv_on_root)
@@ -77,7 +84,7 @@ class TestSyncPythonEnv:
     assert (tmp_path / "uv-cache").is_dir()
 
   def test_readonly_agnos_venv_remounts_root_for_sync(self, mocker, tmp_path):
-    _, calls, _ = self._run(
+    marker, calls, _ = self._run(
       mocker, tmp_path,
       active_venv=tmp_path / "active-venv",
       agnos=True,
@@ -86,8 +93,27 @@ class TestSyncPythonEnv:
     )
 
     assert calls[0] == ["sudo", "mount", "-o", "remount,rw", "/"]
+    assert calls[1][:5] == [
+      "sudo", "env",
+      f"UV_CACHE_DIR={tmp_path / 'uv-cache'}",
+      f"VIRTUAL_ENV={tmp_path / 'active-venv'}",
+      "/usr/bin/uv",
+    ]
     assert "sync" in calls[1]
     assert calls[2] == ["sudo", "mount", "-o", "remount,ro", "/"]
+    assert marker.read_text().strip() == DIGEST_V1
+
+  def test_legacy_root_venv_marker_avoids_resync(self, mocker, tmp_path):
+    _, calls, _ = self._run(
+      mocker, tmp_path,
+      active_venv=tmp_path / "active-venv",
+      agnos=True,
+      root_readonly=True,
+      venv_on_root=True,
+      legacy_marker_text=DIGEST_V1,
+    )
+
+    assert calls == []
 
   def test_writable_root_restores_readonly_after_failure(self, mocker):
     run = mocker.patch.object(build.subprocess, "run")

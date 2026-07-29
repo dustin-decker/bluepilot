@@ -72,14 +72,23 @@ def sync_python_env() -> None:
   # BluePilot: uv otherwise rejects an invalid/stale project .venv even though
   # the device has a valid active environment at /usr/local/venv.
   active_venv = _active_venv()
-  sync_marker = os.path.join(active_venv, ".op_synced_lock") if active_venv else SYNC_MARKER
+  root_active_venv = bool(AGNOS and active_venv and _venv_on_root(active_venv))
+  sync_marker = os.path.join(DEVICE_UV_CACHE_DIR, ".op_synced_lock") if root_active_venv else (
+    os.path.join(active_venv, ".op_synced_lock") if active_venv else SYNC_MARKER
+  )
 
-  try:
-    with open(sync_marker) as f:
-      if f.read().strip() == digest:
-        return
-  except FileNotFoundError:
-    pass
+  # Older recovery builds wrote the marker into /usr/local/venv while the root
+  # filesystem was temporarily writable. Continue honoring that marker.
+  marker_paths = [sync_marker]
+  if root_active_venv:
+    marker_paths.append(os.path.join(active_venv, ".op_synced_lock"))
+  for marker_path in marker_paths:
+    try:
+      with open(marker_path) as f:
+        if f.read().strip() == digest:
+          return
+    except FileNotFoundError:
+      pass
 
   uv = shutil.which("uv") or os.path.expanduser("~/.local/bin/uv")
   if not os.path.exists(uv):
@@ -102,9 +111,17 @@ def sync_python_env() -> None:
     os.makedirs(DEVICE_UV_CACHE_DIR, exist_ok=True)
     sync_env["UV_CACHE_DIR"] = DEVICE_UV_CACHE_DIR
 
-  needs_root_write = bool(AGNOS and active_venv and _venv_on_root(active_venv) and _root_readonly())
+  needs_root_write = bool(root_active_venv and _root_readonly())
+  run_cmd = ([
+    "sudo", "env",
+    f"UV_CACHE_DIR={DEVICE_UV_CACHE_DIR}",
+    f"VIRTUAL_ENV={active_venv}",
+    *sync_cmd,
+  ] if root_active_venv else sync_cmd)
   with _writable_root(needs_root_write):
-    subprocess.run(sync_cmd, cwd=BASEDIR, check=True, env=sync_env)
+    # The prebuilt environment is root-owned in addition to being mounted
+    # read-only, so its sync must run elevated after the guarded remount.
+    subprocess.run(run_cmd, cwd=BASEDIR, check=True, env=sync_env)
 
     os.makedirs(os.path.dirname(sync_marker), exist_ok=True)
     with open(sync_marker, "w") as f:
