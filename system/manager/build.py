@@ -65,7 +65,10 @@ def sync_python_env() -> None:
   # --inexact: only add missing packages, never remove extras (won't clobber a dev's env).
   sync_cmd = [uv, "sync", "--frozen", "--inexact"]
   if active_venv and os.path.realpath(active_venv) != os.path.realpath(PROJECT_VENV):
-    sync_cmd.append("--active")
+    # The prebuilt interpreter can lag .python-version while remaining compatible
+    # with pyproject.toml. An explicit path prevents uv from trying to download the
+    # exact .python-version on AGNOS, where managed Python downloads are disabled.
+    sync_cmd.extend(["--active", "--python", os.path.join(active_venv, "bin", "python")])
   subprocess.run(sync_cmd, cwd=BASEDIR, check=True)
 
   os.makedirs(os.path.dirname(sync_marker), exist_ok=True)

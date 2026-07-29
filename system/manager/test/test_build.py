@@ -54,7 +54,10 @@ class TestSyncPythonEnv:
   def test_prebuilt_device_syncs_active_venv(self, mocker, tmp_path):
     marker, calls = self._run(mocker, tmp_path, active_venv=tmp_path / "active-venv")
 
-    assert calls == [["/usr/bin/uv", "sync", "--frozen", "--inexact", "--active"]]
+    assert calls == [[
+      "/usr/bin/uv", "sync", "--frozen", "--inexact", "--active",
+      "--python", str(tmp_path / "active-venv" / "bin" / "python"),
+    ]]
     assert marker.read_text().strip() == DIGEST_V1
 
   def test_missing_lockfile_is_noop(self, mocker, tmp_path):
