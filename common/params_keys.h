@@ -228,6 +228,18 @@ inline static std::unordered_map<std::string, ParamKeyAttributes> keys = {
     {"DynamicExperimentalControl", {PERSISTENT | BACKUP, BOOL, "0"}},
     {"BlindSpot", {PERSISTENT | BACKUP, BOOL, "0"}},
     {"ShowBlindspotOverlay", {PERSISTENT | BACKUP, BOOL, "1"}},
+    // BluePilot: vision adjacent spot monitoring configuration and freshness-gated runtime state
+    {"VASMAnnotationConfig", {PERSISTENT | BACKUP, JSON, "{}"}},
+    {"VASMConfidenceThreshold", {PERSISTENT | BACKUP, FLOAT, "0.85"}},
+    {"VASMEnabled", {PERSISTENT | BACKUP, BOOL, "0"}},
+    {"VASMLeftActive", {CLEAR_ON_MANAGER_START, STRING, "0"}},
+    {"VASMLeftConfidence", {CLEAR_ON_MANAGER_START, STRING, "0.0"}},
+    {"VASMLastUpdateMonoTime", {CLEAR_ON_MANAGER_START, STRING, "0"}},
+    {"VASMRightActive", {CLEAR_ON_MANAGER_START, STRING, "0"}},
+    {"VASMRightConfidence", {CLEAR_ON_MANAGER_START, STRING, "0.0"}},
+    {"VASMSmoothSeconds", {PERSISTENT | BACKUP, FLOAT, "0.2"}},
+    {"VASMTimestampEof", {CLEAR_ON_MANAGER_START, STRING, "0"}},
+    // End BluePilot
 
     // sunnypilot model params
     {"CameraOffset", {PERSISTENT | BACKUP, FLOAT, "0.0"}},

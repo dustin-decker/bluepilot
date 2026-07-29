@@ -7,6 +7,8 @@ from openpilot.sunnypilot.selfdrive.controls.lib.lane_turn_desire import LaneTur
 from openpilot.common.bluepilot import is_bluepilot
 if is_bluepilot():
   from openpilot.bluepilot.selfdrive.controls.bp_desire_helper import BPBlinkerPause
+  # BluePilot: merge freshness-gated V-ASM detections with OEM blind-spot signals.
+  from openpilot.bluepilot.vision.vision_bsm import VisionBSMCombiner
 
 LaneChangeState = log.LaneChangeState
 LaneChangeDirection = log.LaneChangeDirection
@@ -58,6 +60,7 @@ class DesireHelper:
     # BluePilot: blinker-based lane change pause
     if is_bluepilot():
       self._bp_blinker_pause = BPBlinkerPause()
+      self._bp_vision_bsm = VisionBSMCombiner()
 
   @staticmethod
   def get_lane_change_direction(CS):
@@ -70,8 +73,15 @@ class DesireHelper:
     one_blinker = carstate.leftBlinker != carstate.rightBlinker
     below_lane_change_speed = v_ego < LANE_CHANGE_SPEED_MIN
 
+    # BluePilot: apply V-ASM anywhere blind-spot state gates a turn or lane change.
+    blindspot_left, blindspot_right = (
+      self._bp_vision_bsm.combined_state(carstate.leftBlindspot, carstate.rightBlindspot)
+      if is_bluepilot() else (carstate.leftBlindspot, carstate.rightBlindspot)
+    )
+    # End BluePilot
+
     # Lane turn controller update
-    self.lane_turn_controller.update_lane_turn(blindspot_left=carstate.leftBlindspot, blindspot_right=carstate.rightBlindspot,
+    self.lane_turn_controller.update_lane_turn(blindspot_left=blindspot_left, blindspot_right=blindspot_right,
                                                left_blinker=carstate.leftBlinker, right_blinker=carstate.rightBlinker, v_ego=v_ego)
     self.lane_turn_direction = self.lane_turn_controller.get_turn_direction()
 
@@ -96,8 +106,8 @@ class DesireHelper:
                          ((carstate.steeringTorque > 0 and self.lane_change_direction == LaneChangeDirection.left) or
                           (carstate.steeringTorque < 0 and self.lane_change_direction == LaneChangeDirection.right))
 
-        blindspot_detected = ((carstate.leftBlindspot and self.lane_change_direction == LaneChangeDirection.left) or
-                              (carstate.rightBlindspot and self.lane_change_direction == LaneChangeDirection.right))
+        blindspot_detected = ((blindspot_left and self.lane_change_direction == LaneChangeDirection.left) or
+                              (blindspot_right and self.lane_change_direction == LaneChangeDirection.right))
 
         self.alc.update_lane_change(blindspot_detected, carstate.brakePressed)
 

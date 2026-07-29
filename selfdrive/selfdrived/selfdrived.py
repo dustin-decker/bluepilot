@@ -10,6 +10,7 @@ from msgq.visionipc import VisionIpcClient, VisionStreamType
 
 
 from openpilot.common.params import Params
+from openpilot.common.bluepilot import is_bluepilot
 from openpilot.common.realtime import config_realtime_process, Priority, Ratekeeper, DT_CTRL
 from openpilot.common.swaglog import cloudlog
 from openpilot.common.gps import get_gps_location_service
@@ -30,6 +31,11 @@ from openpilot.sunnypilot.selfdrive.car.car_specific import CarSpecificEventsSP
 from openpilot.sunnypilot.selfdrive.car.cruise_helpers import CruiseHelper
 from openpilot.sunnypilot.selfdrive.car.intelligent_cruise_button_management.controller import IntelligentCruiseButtonManagement
 from openpilot.sunnypilot.selfdrive.selfdrived.events import EventsSP
+
+# BluePilot: merge freshness-gated V-ASM detections with OEM blind-spot signals.
+if is_bluepilot():
+  from openpilot.bluepilot.vision.vision_bsm import VisionBSMCombiner
+# End BluePilot
 
 REPLAY = "REPLAY" in os.environ
 SIMULATION = "SIMULATION" in os.environ
@@ -55,6 +61,10 @@ IGNORED_SAFETY_MODES = (SafetyModel.silent, SafetyModel.noOutput)
 class SelfdriveD(CruiseHelper):
   def __init__(self, CP=None, CP_SP=None):
     self.params = Params()
+    # BluePilot: V-ASM state is published through shared-memory Params.
+    if is_bluepilot():
+      self._bp_vision_bsm = VisionBSMCombiner(self.params)
+    # End BluePilot
 
     # Ensure the current branch is cached, otherwise the first cycle lags
     build_metadata = get_build_metadata()
@@ -318,11 +328,18 @@ class SelfdriveD(CruiseHelper):
       self.events.add(EventName.excessiveActuation)
     # ******************************************************************************************
 
+    # BluePilot: combine OEM and fresh vision blind-spot state for alerts.
+    blindspot_left, blindspot_right = (
+      self._bp_vision_bsm.combined_state(CS.leftBlindspot, CS.rightBlindspot)
+      if is_bluepilot() else (CS.leftBlindspot, CS.rightBlindspot)
+    )
+    # End BluePilot
+
     # Handle lane change
     if self.sm['modelV2'].meta.laneChangeState == LaneChangeState.preLaneChange:
       direction = self.sm['modelV2'].meta.laneChangeDirection
-      if (CS.leftBlindspot and direction == LaneChangeDirection.left) or \
-         (CS.rightBlindspot and direction == LaneChangeDirection.right):
+      if (blindspot_left and direction == LaneChangeDirection.left) or \
+         (blindspot_right and direction == LaneChangeDirection.right):
         self.events.add(EventName.laneChangeBlocked)
       else:
         if direction == LaneChangeDirection.left:

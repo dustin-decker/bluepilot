@@ -183,6 +183,10 @@ from bluepilot.backend.handlers.log_downloads import (
     handle_qlog_download, handle_rlog_download
 )
 
+# BluePilot: V-ASM annotation, snapshot, and validation helpers
+from bluepilot.backend.vasm import capture_live_driver_jpeg, decode_json_object, normalize_vasm_config
+# End BluePilot
+
 # Params - import from params_manager to get fallback support
 from bluepilot.backend.params.params_manager import Params
 params = Params()
@@ -882,7 +886,9 @@ class WebRoutesHandler(BaseHTTPRequestHandler):
                     '/api/drive-stats',
                     '/api/panels',
                 ]
-                is_allowed_onroad = any(path.startswith(ep) for ep in allowed_onroad_prefixes)
+                # BluePilot: V-ASM status is read-only and safe to display onroad.
+                is_allowed_onroad = path == '/api/vasm/status' or any(path.startswith(ep) for ep in allowed_onroad_prefixes)
+                # End BluePilot
 
                 if not is_allowed_onroad:
                     # Block route-related operations when onroad
@@ -896,7 +902,7 @@ class WebRoutesHandler(BaseHTTPRequestHandler):
 
             # SPA routes - serve index.html for frontend routes
             # This allows direct navigation and page refresh to work
-            SPA_ROUTES = {'/', '/index.html', '/settings', '/parameters', '/routes', '/logs'}
+            SPA_ROUTES = {'/', '/index.html', '/settings', '/parameters', '/routes', '/logs', '/vasm'}
 
             # Route handlers
             if path in SPA_ROUTES or path.startswith('/settings/'):
@@ -940,6 +946,36 @@ class WebRoutesHandler(BaseHTTPRequestHandler):
                         'healthy': False,
                         'error': str(e)
                     }, 500)
+
+            # BluePilot: V-ASM is configured offroad from a live driver-camera snapshot.
+            elif path == '/api/vasm/snapshot':
+                jpeg = capture_live_driver_jpeg()
+                if jpeg is None:
+                    self.send_json_response({'error': 'Unable to capture live frame from driver camera'}, 503)
+                else:
+                    self.send_response(200)
+                    self.send_header('Content-Type', 'image/jpeg')
+                    self.send_header('Content-Length', str(len(jpeg)))
+                    self.send_header('Cache-Control', 'no-store')
+                    self.send_cors_headers()
+                    self.end_headers()
+                    self.wfile.write(jpeg)
+
+            elif path == '/api/vasm/config':
+                self.send_json_response({'config': decode_json_object(params.get('VASMAnnotationConfig'))})
+
+            elif path == '/api/vasm/status':
+                from openpilot.common.params import Params as OpenpilotParams
+                memory_params = OpenpilotParams(memory=True)
+                self.send_json_response({
+                    'enabled': params.get_bool('VASMEnabled'),
+                    'leftActive': memory_params.get('VASMLeftActive') == '1',
+                    'rightActive': memory_params.get('VASMRightActive') == '1',
+                    'leftConfidence': float(memory_params.get('VASMLeftConfidence') or 0.0),
+                    'rightConfidence': float(memory_params.get('VASMRightConfidence') or 0.0),
+                    'lastUpdateMonoTime': float(memory_params.get('VASMLastUpdateMonoTime') or 0.0),
+                })
+            # End BluePilot
 
             elif path == '/api/status':
                 # Basic status endpoint (lightweight, always available)
@@ -2895,6 +2931,27 @@ class WebRoutesHandler(BaseHTTPRequestHandler):
                     }, 503)
                     return
 
+            # BluePilot: validate and save V-ASM polygons; saving enables the daemon.
+            if path == '/api/vasm/config':
+                try:
+                    content_length = int(self.headers.get('Content-Length', 0))
+                    if content_length <= 0 or content_length > 65536:
+                        self.send_json_response({'error': 'Invalid configuration payload size'}, 400)
+                        return
+                    data = json.loads(self.rfile.read(content_length).decode('utf-8'))
+                    config = normalize_vasm_config(data)
+                    params.put('VASMAnnotationConfig', json.dumps(config, separators=(',', ':')))
+                    params.put_bool('VASMEnabled', True)
+                    self.send_json_response({
+                        'success': True,
+                        'config': config,
+                        'message': 'Annotation saved and V-ASM enabled',
+                    })
+                except (json.JSONDecodeError, ValueError) as e:
+                    self.send_json_response({'error': str(e)}, 400)
+                return
+            # End BluePilot
+
             # Cancel export operations
             if path.startswith('/api/route-export/') and path.endswith('/cancel'):
                 parts = path.split('/')[3:]
@@ -3608,7 +3665,16 @@ class WebRoutesHandler(BaseHTTPRequestHandler):
                 }, 503)
                 return
 
-            if path.startswith('/api/delete/'):
+            # BluePilot: deleting the annotation also disables V-ASM.
+            if path == '/api/vasm/config':
+                params.put_bool('VASMEnabled', False)
+                params.put('VASMAnnotationConfig', '{}')
+                self.send_json_response({
+                    'success': True,
+                    'message': 'Annotation cleared and V-ASM disabled',
+                })
+            # End BluePilot
+            elif path.startswith('/api/delete/'):
                 import shutil
                 route_base = path.split('/api/delete/')[1].strip('/')
                 segments = get_route_segments(route_base)
