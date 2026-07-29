@@ -138,6 +138,7 @@ from bluepilot.backend.video import (
 
 # System metrics
 from bluepilot.backend.system import get_system_metrics
+from bluepilot.vision.memory_params import create_memory_params
 
 # Params management
 from bluepilot.backend.params.params_manager import (
@@ -965,8 +966,7 @@ class WebRoutesHandler(BaseHTTPRequestHandler):
                 self.send_json_response({'config': decode_json_object(params.get('VASMAnnotationConfig'))})
 
             elif path == '/api/vasm/status':
-                from openpilot.common.params import Params as OpenpilotParams
-                memory_params = OpenpilotParams(memory=True)
+                memory_params = create_memory_params()
                 self.send_json_response({
                     'enabled': params.get_bool('VASMEnabled'),
                     'leftActive': memory_params.get('VASMLeftActive') == '1',
