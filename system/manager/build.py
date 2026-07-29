@@ -3,6 +3,7 @@ import hashlib
 import os
 import shutil
 import subprocess
+from contextlib import contextmanager
 
 # NOTE: Do NOT import anything here that needs be built (e.g. params)
 from openpilot.common.basedir import BASEDIR
@@ -27,6 +28,29 @@ def _active_venv() -> str | None:
   if active_venv and os.path.isfile(os.path.join(active_venv, "bin", "python")):
     return active_venv
   return None
+# End BluePilot
+
+
+# BluePilot: AGNOS mounts the prebuilt environment's root filesystem read-only.
+def _root_readonly() -> bool:
+  return bool(os.statvfs("/").f_flag & os.ST_RDONLY)
+
+
+def _venv_on_root(venv: str) -> bool:
+  return os.path.realpath(venv).startswith("/usr/local/")
+
+
+@contextmanager
+def _writable_root(enabled: bool):
+  remounted = False
+  if enabled:
+    subprocess.run(["sudo", "mount", "-o", "remount,rw", "/"], check=True)
+    remounted = True
+  try:
+    yield
+  finally:
+    if remounted:
+      subprocess.run(["sudo", "mount", "-o", "remount,ro", "/"], check=True)
 # End BluePilot
 
 
@@ -77,11 +101,14 @@ def sync_python_env() -> None:
     # extracted there, while /data has ample persistent storage.
     os.makedirs(DEVICE_UV_CACHE_DIR, exist_ok=True)
     sync_env["UV_CACHE_DIR"] = DEVICE_UV_CACHE_DIR
-  subprocess.run(sync_cmd, cwd=BASEDIR, check=True, env=sync_env)
 
-  os.makedirs(os.path.dirname(sync_marker), exist_ok=True)
-  with open(sync_marker, "w") as f:
-    f.write(digest)
+  needs_root_write = bool(AGNOS and active_venv and _venv_on_root(active_venv) and _root_readonly())
+  with _writable_root(needs_root_write):
+    subprocess.run(sync_cmd, cwd=BASEDIR, check=True, env=sync_env)
+
+    os.makedirs(os.path.dirname(sync_marker), exist_ok=True)
+    with open(sync_marker, "w") as f:
+      f.write(digest)
   # End BluePilot
 
 

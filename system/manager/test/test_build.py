@@ -1,5 +1,7 @@
 import hashlib
 
+import pytest
+
 import openpilot.system.manager.build as build
 
 DIGEST_V1 = hashlib.sha256(b"lock-v1").hexdigest()
@@ -16,7 +18,7 @@ class TestSyncPythonEnv:
   """
 
   def _run(self, mocker, tmp_path, lock_bytes=b"lock-v1", marker_text=None, uv_found=True,
-           active_venv=None, agnos=False):
+           active_venv=None, agnos=False, root_readonly=False, venv_on_root=False):
     lock = tmp_path / "uv.lock"
     if lock_bytes is not None:
       lock.write_bytes(lock_bytes)
@@ -32,6 +34,8 @@ class TestSyncPythonEnv:
                           SYNC_MARKER=str(project_venv / ".op_synced_lock"),
                           DEVICE_UV_CACHE_DIR=str(tmp_path / "uv-cache"), AGNOS=agnos)
     mocker.patch.object(build, "_active_venv", return_value=str(active_venv) if active_venv else None)
+    mocker.patch.object(build, "_root_readonly", return_value=root_readonly)
+    mocker.patch.object(build, "_venv_on_root", return_value=venv_on_root)
     mocker.patch.object(build.shutil, "which", return_value="/usr/bin/uv" if uv_found else None)
     mocker.patch.object(build.os.path, "exists", return_value=uv_found)
     def capture_run(cmd, **kwargs):
@@ -71,6 +75,30 @@ class TestSyncPythonEnv:
 
     assert call_kwargs[0]["env"]["UV_CACHE_DIR"] == str(tmp_path / "uv-cache")
     assert (tmp_path / "uv-cache").is_dir()
+
+  def test_readonly_agnos_venv_remounts_root_for_sync(self, mocker, tmp_path):
+    _, calls, _ = self._run(
+      mocker, tmp_path,
+      active_venv=tmp_path / "active-venv",
+      agnos=True,
+      root_readonly=True,
+      venv_on_root=True,
+    )
+
+    assert calls[0] == ["sudo", "mount", "-o", "remount,rw", "/"]
+    assert "sync" in calls[1]
+    assert calls[2] == ["sudo", "mount", "-o", "remount,ro", "/"]
+
+  def test_writable_root_restores_readonly_after_failure(self, mocker):
+    run = mocker.patch.object(build.subprocess, "run")
+
+    with pytest.raises(RuntimeError), build._writable_root(True):
+      raise RuntimeError("sync failed")
+
+    assert run.call_args_list == [
+      mocker.call(["sudo", "mount", "-o", "remount,rw", "/"], check=True),
+      mocker.call(["sudo", "mount", "-o", "remount,ro", "/"], check=True),
+    ]
 
   def test_missing_lockfile_is_noop(self, mocker, tmp_path):
     _, calls, _ = self._run(mocker, tmp_path, lock_bytes=None)
