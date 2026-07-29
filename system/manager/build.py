@@ -17,6 +17,7 @@ from openpilot.system.hardware import HARDWARE, AGNOS
 UV_LOCK = os.path.join(BASEDIR, "uv.lock")
 PROJECT_VENV = os.path.join(BASEDIR, ".venv")
 SYNC_MARKER = os.path.join(BASEDIR, ".venv", ".op_synced_lock")
+DEVICE_UV_CACHE_DIR = "/data/uv-cache"
 
 
 # BluePilot: prebuilt C3X installs run from /usr/local/venv rather than a
@@ -69,7 +70,14 @@ def sync_python_env() -> None:
     # with pyproject.toml. An explicit path prevents uv from trying to download the
     # exact .python-version on AGNOS, where managed Python downloads are disabled.
     sync_cmd.extend(["--active", "--python", os.path.join(active_venv, "bin", "python")])
-  subprocess.run(sync_cmd, cwd=BASEDIR, check=True)
+
+  sync_env = os.environ.copy()
+  if AGNOS:
+    # /home is a small overlay on C3X. Large wheels such as OpenCV cannot be
+    # extracted there, while /data has ample persistent storage.
+    os.makedirs(DEVICE_UV_CACHE_DIR, exist_ok=True)
+    sync_env["UV_CACHE_DIR"] = DEVICE_UV_CACHE_DIR
+  subprocess.run(sync_cmd, cwd=BASEDIR, check=True, env=sync_env)
 
   os.makedirs(os.path.dirname(sync_marker), exist_ok=True)
   with open(sync_marker, "w") as f:
