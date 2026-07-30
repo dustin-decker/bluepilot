@@ -3,51 +3,14 @@
 # the BP spinner (common/bp_spinner.py -> system/ui/bp_spinner.py) so an on-device build shows a
 # progress bar + the live scons line, and a scrollable build log on failure instead of a black
 # screen. Wired in via launch_chffrplus.sh (./bp_build.py in place of ./build.py).
-import hashlib
 import os
-import shutil
 import subprocess
 
 # NOTE: Do NOT import anything here that needs be built (e.g. params)
 from openpilot.common.basedir import BASEDIR
 from openpilot.common.bp_spinner import BPSpinner
 from openpilot.system.hardware import HARDWARE, AGNOS
-
-# See build.py for the rationale — re-sync the venv whenever the checked-out uv.lock changes.
-UV_LOCK = os.path.join(BASEDIR, "uv.lock")
-SYNC_MARKER = os.path.join(BASEDIR, ".venv", ".op_synced_lock")
-
-
-def _uv_lock_digest() -> str | None:
-  try:
-    with open(UV_LOCK, "rb") as f:
-      return hashlib.sha256(f.read()).hexdigest()
-  except FileNotFoundError:
-    return None
-
-
-def sync_python_env() -> None:
-  digest = _uv_lock_digest()
-  if digest is None:
-    return
-
-  try:
-    with open(SYNC_MARKER) as f:
-      if f.read().strip() == digest:
-        return
-  except FileNotFoundError:
-    pass
-
-  uv = shutil.which("uv") or os.path.expanduser("~/.local/bin/uv")
-  if not os.path.exists(uv):
-    print("uv not found; skipping dependency sync")
-    return
-
-  subprocess.run([uv, "sync", "--frozen", "--inexact"], cwd=BASEDIR, check=True)
-
-  os.makedirs(os.path.dirname(SYNC_MARKER), exist_ok=True)
-  with open(SYNC_MARKER, "w") as f:
-    f.write(digest)
+from openpilot.system.manager.bp_python_env import sync_python_env
 
 
 def _fail(spinner: BPSpinner, message: str) -> None:

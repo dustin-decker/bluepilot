@@ -2,7 +2,9 @@ import hashlib
 
 import pytest
 
-import openpilot.system.manager.build as build
+import openpilot.system.manager.bp_python_env as build
+from openpilot.system.manager import bp_build
+from openpilot.system.manager import build as stock_build
 
 DIGEST_V1 = hashlib.sha256(b"lock-v1").hexdigest()
 
@@ -133,3 +135,8 @@ class TestSyncPythonEnv:
   def test_missing_uv_binary_is_noop(self, mocker, tmp_path):
     _, calls, _ = self._run(mocker, tmp_path, uv_found=False)
     assert calls == []
+
+
+def test_build_entrypoints_share_dependency_sync():
+  assert stock_build.sync_python_env is build.sync_python_env
+  assert bp_build.sync_python_env is build.sync_python_env
