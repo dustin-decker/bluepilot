@@ -23,6 +23,8 @@ from openpilot.selfdrive.ui.onroad.driver_state import BTN_SIZE
 from openpilot.selfdrive.ui.sunnypilot.onroad.developer_ui import DeveloperUiState, get_bottom_dev_ui_offset
 from openpilot.selfdrive.ui.ui_state import ui_state
 from openpilot.selfdrive.ui.bp.lib.ui_debug_logger import bp_ui_log
+from openpilot.system.ui.lib.application import FontWeight, gui_app
+from openpilot.system.ui.lib.text_measure import measure_text_cached
 from bluepilot.ui.widgets.debug.autocal_bars import AutoCalBars, poll_status
 
 
@@ -52,16 +54,22 @@ FULL_CONTENT_WIDTH = 2100.0
 # Auto-calibration gauges sit directly below the upper-right steering-wheel button.
 AUTO_CAL_POLL_INTERVAL = 1.0
 AUTO_CAL_BUTTON_GAP = 24
+AUTO_CAL_SCALE = 2.0
+AUTO_CAL_LABEL = "ANGLE CAL"
+AUTO_CAL_LABEL_FONT_SIZE = 30
+AUTO_CAL_LABEL_GAP = 8
+AUTO_CAL_BARS_WIDTH = round(AutoCalBars.WIDTH * AUTO_CAL_SCALE)
+AUTO_CAL_BARS_HEIGHT = round(AutoCalBars.HEIGHT * AUTO_CAL_SCALE)
 
 
 def auto_cal_bars_rect(content_rect: rl.Rectangle) -> rl.Rectangle:
   """Center the temporary auto-cal gauges below the steering-wheel button."""
   button_left = content_rect.x + content_rect.width - UI_BORDER_SIZE - BTN_SIZE
   return rl.Rectangle(
-    button_left + (BTN_SIZE - AutoCalBars.WIDTH) / 2,
-    content_rect.y + UI_BORDER_SIZE + BTN_SIZE + AUTO_CAL_BUTTON_GAP,
-    AutoCalBars.WIDTH,
-    AutoCalBars.HEIGHT,
+    button_left + (BTN_SIZE - AUTO_CAL_BARS_WIDTH) / 2,
+    content_rect.y + UI_BORDER_SIZE + BTN_SIZE + AUTO_CAL_BUTTON_GAP + AUTO_CAL_LABEL_FONT_SIZE + AUTO_CAL_LABEL_GAP,
+    AUTO_CAL_BARS_WIDTH,
+    AUTO_CAL_BARS_HEIGHT,
   )
 
 
@@ -105,7 +113,7 @@ class AugmentedRoadViewBP(CameraViewBP, AugmentedRoadView, BlindspotRendererMixi
     self._rad_racer_active = self._bp_params.get_bool("BPRadRacerTheme")
 
     # BluePilot: Temporary onroad progress gauges for Ford angle auto-calibration.
-    self._auto_cal_bars = AutoCalBars()
+    self._auto_cal_bars = AutoCalBars(scale=AUTO_CAL_SCALE)
     self._last_auto_cal_poll = 0.0
 
   def update_fade_out_bottom_overlay(self, _content_rect):
@@ -304,8 +312,20 @@ class AugmentedRoadViewBP(CameraViewBP, AugmentedRoadView, BlindspotRendererMixi
     self._auto_cal_bars.update_status(poll_status())
 
   def _render_auto_cal_bars(self, content_rect: rl.Rectangle) -> None:
-    if self._auto_cal_bars.in_progress:
-      self._auto_cal_bars.render(auto_cal_bars_rect(content_rect))
+    if not self._auto_cal_bars.in_progress:
+      return
+
+    bars_rect = auto_cal_bars_rect(content_rect)
+    font = gui_app.font(FontWeight.SEMI_BOLD)
+    label_size = measure_text_cached(font, AUTO_CAL_LABEL, AUTO_CAL_LABEL_FONT_SIZE)
+    label_pos = rl.Vector2(
+      bars_rect.x + (bars_rect.width - label_size.x) / 2,
+      bars_rect.y - AUTO_CAL_LABEL_GAP - label_size.y,
+    )
+    shadow_pos = rl.Vector2(label_pos.x + 2, label_pos.y + 2)
+    rl.draw_text_ex(font, AUTO_CAL_LABEL, shadow_pos, AUTO_CAL_LABEL_FONT_SIZE, 0, rl.Color(0, 0, 0, 180))
+    rl.draw_text_ex(font, AUTO_CAL_LABEL, label_pos, AUTO_CAL_LABEL_FONT_SIZE, 0, rl.Color(225, 230, 235, 230))
+    self._auto_cal_bars.render(bars_rect)
 
   def _get_dm_center_y(self, content_rect: rl.Rectangle) -> float:
     """Get the driver monitor face icon's vertical center Y coordinate.

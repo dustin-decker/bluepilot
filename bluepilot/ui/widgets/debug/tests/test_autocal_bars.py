@@ -58,3 +58,13 @@ def test_onroad_progress_is_hidden_once_locked():
   assert bars.active
   assert bars.locked
   assert not bars.in_progress
+
+
+def test_scaled_render_dimensions_preserve_default_size():
+  default = AutoCalBars()
+  doubled = AutoCalBars(scale=2.0)
+
+  assert default.render_width == AutoCalBars.WIDTH
+  assert default.render_height == AutoCalBars.HEIGHT
+  assert doubled.render_width == AutoCalBars.WIDTH * 2
+  assert doubled.render_height == AutoCalBars.HEIGHT * 2

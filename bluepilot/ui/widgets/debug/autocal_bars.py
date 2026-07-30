@@ -77,11 +77,22 @@ class AutoCalBars(Widget):
   WIDTH = _BATT_W + 8
   HEIGHT = 2 * _ROW_PITCH
 
-  def __init__(self):
+  def __init__(self, scale: float = 1.0):
     super().__init__()
+    if scale <= 0:
+      raise ValueError("scale must be positive")
+    self._scale = float(scale)
     self._raw = None
     self._st = None                        # dict (armed JSON) | "locked" | None
     self._full = {"low": False, "high": False}  # latched-full state per band (hysteresis)
+
+  @property
+  def render_width(self) -> int:
+    return round(self.WIDTH * self._scale)
+
+  @property
+  def render_height(self) -> int:
+    return round(self.HEIGHT * self._scale)
 
   def update_status(self, status: str | None):
     if status is None or status == self._raw:
@@ -116,26 +127,34 @@ class AutoCalBars(Widget):
     return fill
 
   def _draw_battery(self, x: int, y: int, fill: float, rgb):
+    batt_w = round(_BATT_W * self._scale)
+    batt_h = round(_BATT_H * self._scale)
+    nub_w = round(_NUB_W * self._scale)
+    nub_h = round(_NUB_H * self._scale)
+    pad = max(1, round(2 * self._scale))
     col = rl.Color(rgb[0], rgb[1], rgb[2], 235)
-    body_y = int(y + _NUB_H)
-    rl.draw_rectangle(x + (_BATT_W - _NUB_W) // 2, int(y), _NUB_W, _NUB_H, rl.Color(150, 155, 165, 200))
-    body = rl.Rectangle(x, body_y, _BATT_W, _BATT_H)
+    body_y = int(y + nub_h)
+    rl.draw_rectangle(x + (batt_w - nub_w) // 2, int(y), nub_w, nub_h, rl.Color(150, 155, 165, 200))
+    body = rl.Rectangle(x, body_y, batt_w, batt_h)
     rl.draw_rectangle_rounded(body, 0.25, 6, rl.Color(38, 42, 52, 200))
-    fh = int((_BATT_H - 4) * fill)
+    fh = int((batt_h - 2 * pad) * fill)
     if fh > 0:
-      rl.draw_rectangle(x + 2, body_y + _BATT_H - 2 - fh, _BATT_W - 4, fh, col)
-    rl.draw_rectangle_rounded_lines_ex(body, 0.25, 6, 1.5, rl.Color(150, 155, 165, 200))
+      rl.draw_rectangle(x + pad, body_y + batt_h - pad - fh, batt_w - 2 * pad, fh, col)
+    rl.draw_rectangle_rounded_lines_ex(body, 0.25, 6, 1.5 * self._scale, rl.Color(150, 155, 165, 200))
 
   def _draw_lock(self, x: int, y: int, rgb):
+    batt_w = round(_BATT_W * self._scale)
+    batt_h = round(_BATT_H * self._scale)
+    nub_h = round(_NUB_H * self._scale)
     col = rl.Color(rgb[0], rgb[1], rgb[2], 235)
-    body_w, body_h = _BATT_W, 26
-    body_y = int(y + _NUB_H + _BATT_H - body_h)
+    body_w, body_h = batt_w, round(26 * self._scale)
+    body_y = int(y + nub_h + batt_h - body_h)
     # shackle: a half-ring sitting on the body
-    cx = x + _BATT_W / 2
-    rl.draw_ring(rl.Vector2(cx, body_y), 6.0, 9.0, 180.0, 360.0, 16, col)
+    cx = x + batt_w / 2
+    rl.draw_ring(rl.Vector2(cx, body_y), 6.0 * self._scale, 9.0 * self._scale, 180.0, 360.0, 16, col)
     body = rl.Rectangle(x, body_y, body_w, body_h)
     rl.draw_rectangle_rounded(body, 0.3, 6, col)
-    rl.draw_circle(int(cx), body_y + body_h // 2, 2.5, rl.Color(20, 22, 28, 255))  # keyhole
+    rl.draw_circle(int(cx), body_y + body_h // 2, 2.5 * self._scale, rl.Color(20, 22, 28, 255))  # keyhole
 
   def _render(self, rect: rl.Rectangle):
     if self._st is None:
@@ -143,6 +162,12 @@ class AutoCalBars(Widget):
     font = gui_app.font(FontWeight.NORMAL)
     y = rect.y
     x = int(rect.x)
+    batt_w = round(_BATT_W * self._scale)
+    batt_h = round(_BATT_H * self._scale)
+    nub_h = round(_NUB_H * self._scale)
+    label_gap = round(_LABEL_GAP * self._scale)
+    label_font = round(_LABEL_FONT * self._scale)
+    row_pitch = round(_ROW_PITCH * self._scale)
     for band, rgb, label in (("low", _BLUE, "<30"), ("high", _RED, ">60")):
       if self.locked:
         self._draw_lock(x, int(y), rgb)
@@ -152,7 +177,7 @@ class AutoCalBars(Widget):
         except (TypeError, ValueError, KeyError):
           pass
       rl.draw_text_ex(font, label,
-                      rl.Vector2(x + (_BATT_W - _LABEL_FONT * len(label) * 0.55) / 2,
-                                 y + _NUB_H + _BATT_H + _LABEL_GAP),
-                      _LABEL_FONT, 0, rl.Color(160, 165, 175, 210))
-      y += _ROW_PITCH
+                      rl.Vector2(x + (batt_w - label_font * len(label) * 0.55) / 2,
+                                 y + nub_h + batt_h + label_gap),
+                      label_font, 0, rl.Color(160, 165, 175, 210))
+      y += row_pitch
