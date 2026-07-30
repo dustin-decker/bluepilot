@@ -103,6 +103,11 @@ class AutoCalBars(Widget):
     return self._st is not None
 
   @property
+  def in_progress(self) -> bool:
+    """True only while auto-calibration is collecting or verifying."""
+    return isinstance(self._st, dict)
+
+  @property
   def locked(self) -> bool:
     return self._st == "locked"
 

@@ -1,7 +1,7 @@
 import time
 from enum import IntEnum
 import pyray as rl
-from cereal import log, messaging
+from cereal import log
 from openpilot.common.params import Params
 from openpilot.selfdrive.ui import UI_BORDER_SIZE
 from openpilot.selfdrive.ui.onroad.augmented_road_view import AugmentedRoadView
@@ -23,6 +23,7 @@ from openpilot.selfdrive.ui.onroad.driver_state import BTN_SIZE
 from openpilot.selfdrive.ui.sunnypilot.onroad.developer_ui import DeveloperUiState, get_bottom_dev_ui_offset
 from openpilot.selfdrive.ui.ui_state import ui_state
 from openpilot.selfdrive.ui.bp.lib.ui_debug_logger import bp_ui_log
+from bluepilot.ui.widgets.debug.autocal_bars import AutoCalBars, poll_status
 
 
 class GaugeStyle(IntEnum):
@@ -47,6 +48,21 @@ TORQUE_STRIP_GAP = 3       # Gap between strip bottom and gauge content top
 
 # Full screen reference for sidebar detection
 FULL_CONTENT_WIDTH = 2100.0
+
+# Auto-calibration gauges sit directly below the upper-right steering-wheel button.
+AUTO_CAL_POLL_INTERVAL = 1.0
+AUTO_CAL_BUTTON_GAP = 24
+
+
+def auto_cal_bars_rect(content_rect: rl.Rectangle) -> rl.Rectangle:
+  """Center the temporary auto-cal gauges below the steering-wheel button."""
+  button_left = content_rect.x + content_rect.width - UI_BORDER_SIZE - BTN_SIZE
+  return rl.Rectangle(
+    button_left + (BTN_SIZE - AutoCalBars.WIDTH) / 2,
+    content_rect.y + UI_BORDER_SIZE + BTN_SIZE + AUTO_CAL_BUTTON_GAP,
+    AutoCalBars.WIDTH,
+    AutoCalBars.HEIGHT,
+  )
 
 
 class AugmentedRoadViewBP(CameraViewBP, AugmentedRoadView, BlindspotRendererMixin):
@@ -88,15 +104,20 @@ class AugmentedRoadViewBP(CameraViewBP, AugmentedRoadView, BlindspotRendererMixi
     self._rad_racer_theme = RadRacerTheme()
     self._rad_racer_active = self._bp_params.get_bool("BPRadRacerTheme")
 
+    # BluePilot: Temporary onroad progress gauges for Ford angle auto-calibration.
+    self._auto_cal_bars = AutoCalBars()
+    self._last_auto_cal_poll = 0.0
+
   def update_fade_out_bottom_overlay(self, _content_rect):
     """BluePilot: Skip MICI fade overlay on TICI — causes unwanted black gradient at bottom."""
-    pass
 
   def _render(self, rect):
     """Override render to add blindspot, gauges, confidence ball on left."""
     bp_ui_log.tick()
     if not ui_state.started:
       return
+
+    self._poll_auto_cal_status()
 
     # Refresh param periodically (~1s at 60fps)
     self._param_counter += 1
@@ -212,6 +233,10 @@ class AugmentedRoadViewBP(CameraViewBP, AugmentedRoadView, BlindspotRendererMixi
         torque_rect = rl.Rectangle(ui_rect.x, ui_rect.y, ui_rect.width, ui_rect.height - get_bottom_dev_ui_offset())
       self._torque_bar.render(torque_rect, gauge_height_offset=gauge_height_offset)
 
+    # BluePilot: Show angle auto-calibration progress on the normal onroad screen.
+    # It disappears as soon as both calibration bands report locked.
+    self._render_auto_cal_bars(self._content_rect)
+
     # Alerts last so they are never covered by gauges or other overlays.
     # BluePilot: Full-screen alerts (e.g. reverse gear) must use content_rect so they cover
     # the confidence ball strip; otherwise the camera shows through where the ball was.
@@ -259,6 +284,9 @@ class AugmentedRoadViewBP(CameraViewBP, AugmentedRoadView, BlindspotRendererMixi
     # Driver monitor floats bottom-left of the road view, just above the gauge cluster
     self.driver_state_renderer.render(self._rad_racer_theme.driver_monitor_rect(content_rect))
 
+    # Auto-calibration remains visible with the optional Rad Racer theme too.
+    self._render_auto_cal_bars(content_rect)
+
     # Alerts always on top
     self.alert_renderer.render(content_rect)
 
@@ -267,6 +295,17 @@ class AugmentedRoadViewBP(CameraViewBP, AugmentedRoadView, BlindspotRendererMixi
 
     if not self._hide_onroad_border:
       self._draw_border(rect)
+
+  def _poll_auto_cal_status(self) -> None:
+    now = time.monotonic()
+    if now - self._last_auto_cal_poll < AUTO_CAL_POLL_INTERVAL:
+      return
+    self._last_auto_cal_poll = now
+    self._auto_cal_bars.update_status(poll_status())
+
+  def _render_auto_cal_bars(self, content_rect: rl.Rectangle) -> None:
+    if self._auto_cal_bars.in_progress:
+      self._auto_cal_bars.render(auto_cal_bars_rect(content_rect))
 
   def _get_dm_center_y(self, content_rect: rl.Rectangle) -> float:
     """Get the driver monitor face icon's vertical center Y coordinate.

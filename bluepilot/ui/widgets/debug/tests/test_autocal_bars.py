@@ -3,7 +3,7 @@
 Regression for the 'fills full then un-fills' bug: the fill is now one monotonic
 progress-toward-calibrated metric, and a calibrated ('good') band latches full.
 """
-from bluepilot.ui.widgets.debug.autocal_bars import band_fill, _COLLECT_TOP, _VERIFY_TOP
+from bluepilot.ui.widgets.debug.autocal_bars import AutoCalBars, band_fill, _COLLECT_TOP, _VERIFY_TOP
 
 
 def test_collect_never_reads_full():
@@ -46,3 +46,15 @@ def test_collect_reset_drops_full():
   # Evidence lost (back to collect) un-latches full.
   fill, full = band_fill({"ph": "collect", "w": 0, "need": 10}, True)
   assert not full and fill == 0.0
+
+
+def test_onroad_progress_is_hidden_once_locked():
+  bars = AutoCalBars()
+
+  bars.update_status('{"low": {}, "high": {}}')
+  assert bars.in_progress
+
+  bars.update_status("locked")
+  assert bars.active
+  assert bars.locked
+  assert not bars.in_progress
