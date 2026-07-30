@@ -128,21 +128,12 @@ class LateralAngleExt:
     self.path_angle_gain_highC_highV = 1.0  # gain at high speed, high curvature
     self.bp_path_angle_gain_lowC_highV = 1.0
     self.bp_path_angle_gain_highC_highV = 1.0
-    # User-tunable "feel" multipliers: read from FordLowSpeedFactor_ang / FordHighSpeedFactor_ang params.
+    # User-tunable "feel" multipliers: read from the angle-tuning Params below.
     self.low_speed_curv_factor = 1.0
     self.high_speed_curv_factor = 1.0
+    self.user_dampening_factor = 1.0
     self.bp_low_speed_curv_factor = 1.0
     self.bp_high_speed_curv_factor = 1.0
-    # BluePilot: sub-knee small-signal gain lift (FordSmallSignalFactor, 1.0 = stock).
-    # 2026-07-23 lag-aligned measurement (routes 0b/12/13): the PSCM delivers only
-    # ~0.75-0.85 of commands in the |kappa| 0.0002-0.0007 band — BELOW the gain knee,
-    # where the calibrated factors never apply — while delivery at |kappa| >= 0.001 is
-    # ~1.0. The planner integrates that small-signal deficit into the ~6-7 s
-    # straight-road weave (left line / right line). This factor scales the sub-knee
-    # branch's HIGH-SPEED endpoint only: city (v < V_LOW) and the calibrated
-    # above-knee region are untouched, so it cannot interact with auto-calibration
-    # (whose samples require |kappa| >= MIN_KAPPA = the knee top).
-    self.small_signal_factor = 1.0
     # BluePilot: angle mode's own lane-change scaling factor, independent of curvature mode's
     # lane_change_factor_high_curv -- angle needs a boost (>1) where curvature needs a cut (<1).
     self.lane_change_factor_high_ang = 1.0
@@ -204,21 +195,23 @@ class LateralAngleExt:
     self.smoother.strength = float(v)
 
   def update_angle_params(self, params):
-    """Sets per-platform gain defaults and reads user feel-factor params."""
+    """Sets per-platform gain defaults and reads user angle-tuning params."""
     self._ensure_lateral_curv_initialized(self.CP)
     fp = getattr(self.CP, 'carFingerprint', '')
     low, high = platform_gains(fp)
     self.path_angle_gain_lowC_highV = low
     self.path_angle_gain_highC_highV = high
     if params is not None and hasattr(params, "get"):
-      for attr, key in (("low_speed_curv_factor", "FordLowSpeedFactor_ang"),
-                        ("high_speed_curv_factor", "FordHighSpeedFactor_ang"),
-                        ("small_signal_factor", "FordSmallSignalFactor")):
+      for attr, key, min_value, max_value in (
+        ("low_speed_curv_factor", "FordLowSpeedFactor_ang", 0.5, 1.5),
+        ("high_speed_curv_factor", "FordHighSpeedFactor_ang", 0.5, 1.5),
+        ("user_dampening_factor", "FordHighSpeedDampening_ang", 0.75, 1.25),
+      ):
         try:
           raw = params.get(key, return_default=True)
           if raw is not None and raw != b"":
             setattr(self, attr, float(clip(
-              float(raw.decode("utf-8", errors="replace") if isinstance(raw, bytes) else raw), 0.5, 1.5)))
+              float(raw.decode("utf-8", errors="replace") if isinstance(raw, bytes) else raw), min_value, max_value)))
         except Exception:
           pass
       try:
@@ -508,11 +501,8 @@ class LateralAngleExt:
 
 
     # Speed-interpolated gain: at low speed both curves use 1.0; at high speed the params take effect.
-    # small_signal_factor lifts the sub-knee (low-curvature) branch at speed only — the
-    # measured PSCM small-angle under-delivery lives here and the calibrated factors
-    # cannot reach it (see the __init__ comment). 1.0 = bit-identical stock.
     self.low_gain_calc = interp(v_ego, [V_LOW, V_HIGH],
-                                [1.0, self.path_angle_gain_lowC_highV * self.small_signal_factor])
+                                [1.0, self.path_angle_gain_lowC_highV * self.user_dampening_factor])
     self.high_gain_calc = interp(v_ego, [V_LOW, V_HIGH],
                                  [(LOW_ANCHOR_BASE * self.low_speed_curv_factor),
                                   (self.path_angle_gain_highC_highV * self.high_speed_curv_factor)])

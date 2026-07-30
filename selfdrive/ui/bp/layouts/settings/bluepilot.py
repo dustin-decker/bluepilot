@@ -590,21 +590,13 @@ class BluePilotLayout(Widget):
       step=0.1,
       icon="chffr_wheel.png"
     )
-    # BluePilot: sub-knee small-signal gain lift — the straights-weave fix. Lag-aligned
-    # measurement (2026-07-23) showed the PSCM delivers only ~75-85% of corrections below
-    # the gain knee, where the calibrated factors never apply; the planner integrates the
-    # deficit into the ~6-7s left-right weave on crowned straights.
-    self._small_signal_factor = float_control_item(
-      lambda: tr("Small Signal Factor"),
-      lambda: tr("Boosts only the tiny steering corrections used on straights (large "
-                 "curve inputs are untouched — those are covered by the factors above). "
-                 "The car measurably under-delivers these small commands, which causes the "
-                 "slow left-right weave on straight roads. 1.0 = stock; the measured "
-                 "deficit suggests 1.20-1.30. High speed only; city driving is unaffected."),
-      param="FordSmallSignalFactor",
-      min_value=0.8,
-      max_value=1.5,
-      step=0.05,
+    self._high_speed_dampening = float_control_item(
+      lambda: tr("High Speed Low Curve Adjustment Factor"),
+      lambda: tr("Tune adjustment factor for low curve straightaways (highways) at high speeds. If oversteering, reduce. If understeering, increase"),
+      param="FordHighSpeedDampening_ang",
+      min_value=0.75,
+      max_value=1.25,
+      step=0.01,
       icon="chffr_wheel.png"
     )
     # Disable BP lateral control toggle
@@ -689,12 +681,12 @@ class BluePilotLayout(Widget):
     angle_items = [
       self._low_speed_curv_factor,
       self._high_speed_curv_factor,
+      self._high_speed_dampening,
       self._angle_autocal,
       self._angle_autocal_lock,
       self._angle_autocal_erase,
       self._angle_smoothing,
       self._angle_smoothing_strength,
-      self._small_signal_factor,
       self._lane_change_factor_high_ang,
     ]
     angle_header = CollapsibleSectionHeader(tr("Angle Tuning"))
@@ -942,12 +934,12 @@ class BluePilotLayout(Widget):
     # Angle-mode items: always visible (Angle Tuning section), greyed out when curvature mode is active
     self._low_speed_curv_factor.action_item.set_enabled(is_angle)
     self._high_speed_curv_factor.action_item.set_enabled(is_angle)
+    self._high_speed_dampening.action_item.set_enabled(is_angle)
     self._angle_autocal.action_item.set_enabled(is_angle)
     self._angle_autocal_lock.action_item.set_enabled(is_angle)
     self._angle_autocal_erase.action_item.set_enabled(is_angle)
     self._angle_smoothing.action_item.set_enabled(is_angle)
     self._angle_smoothing_strength.action_item.set_enabled(is_angle)
-    self._small_signal_factor.action_item.set_enabled(is_angle)
     self._lane_change_factor_high_ang.action_item.set_enabled(is_angle)
     # Curvature-mode items: always visible (Curvature Tuning section), greyed out when angle mode is active
     self._lane_change_factor_high_curv.action_item.set_enabled(is_curv)
