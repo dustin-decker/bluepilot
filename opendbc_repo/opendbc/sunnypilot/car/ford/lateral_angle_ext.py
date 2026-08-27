@@ -112,7 +112,7 @@ _PSCM_SAT_UNWIND_RATE = 0.02        # rad/call (0.02 * 20Hz = 0.40 rad/s)
 # panda-clean wire pattern the human-turn override sends, no ford.h involvement -- resets the
 # PSCM's authority, after which path_angle ramps back in from zero through the soft ROC.
 _STEER_DT = CarControllerParams.STEER_STEP * DT_CTRL  # 20 Hz lateral tick (matches human_turn.py)
-_STALL_GAP_MIN = 2.0 * CarControllerParams.CURVATURE_ERROR  # desired must lead measured by 2x the clip tolerance
+_STALL_GAP_RATIO = 2.0  # x the active clip tolerance (bp_curvature_error): stall gap and the real-curve floor
 _STALL_HOLD_S = 0.5          # accumulated clip-binding time before a pulse fires
 _STALL_BLIP_FRAMES = 6       # mode-0 pulse length (6 frames @ 20 Hz = 300 ms; PSCM acked mode 0 in ~150 ms on-road)
 _STALL_COOLDOWN_S = 2.0      # re-arm delay after a pulse (release ramp + PSCM response time)
@@ -126,6 +126,8 @@ _STALL_MAX_BLIPS = 3         # give up on a stuck episode; devLim telemetry keep
 _PRESS_BLIP_MIN_S = 0.5      # press must last this long before its release earns a pulse
 # The pulse releases steering for 300 ms; never fire it in a curve.
 _BLIP_MAX_PATH_ANGLE = 0.10  # rad
+# steeringPressed chatters: a 30 ms dip inside a 1.7 s hold fired a pulse (route 00000399 t=172.04).
+_PRESS_RELEASE_S = 0.3       # release must persist this long to count as one
 
 
 def pscm_d_ref_m(v_ego_ms: float) -> float:
@@ -192,6 +194,7 @@ class LateralAngleExt:
     self.stall_blip_count = 0         # pulses fired this stall episode
     self.angle_stall_blip_active = False
     self.press_timer_s = 0.0          # continuous steeringPressed time, for the hand-off blip
+    self.release_timer_s = 0.0        # !steeringPressed time, debounces the hand-off blip
 
   def update_angle_params(self, params):
     """Sets per-platform gain defaults and reads user angle-tuning params."""
@@ -287,6 +290,7 @@ class LateralAngleExt:
       self.stall_blip_count = 0
       self.angle_stall_blip_active = False
       self.press_timer_s = 0.0
+      self.release_timer_s = 0.0
       self.precision_type = 1
       return LateralResult(
         apply_curvature=0.0,
@@ -331,6 +335,7 @@ class LateralAngleExt:
       self.stall_blip_count = 0
       self.angle_stall_blip_active = False
       self.press_timer_s = 0.0
+      self.release_timer_s = 0.0
       self.precision_type = 1
       return LateralResult(
         apply_curvature=0.0,
@@ -348,12 +353,16 @@ class LateralAngleExt:
     # reactive stall detector below to watch the car miss the next curve first.
     if CS.out.steeringPressed:
       self.press_timer_s += _STEER_DT
+      self.release_timer_s = 0.0
     else:
-      if (self.press_timer_s >= _PRESS_BLIP_MIN_S and self.stall_blip_cooldown_s <= 0.0
-          and self.stall_blip_frames_left <= 0
-          and abs(self.path_angle_last) < _BLIP_MAX_PATH_ANGLE):
-        self.stall_blip_frames_left = _STALL_BLIP_FRAMES
-      self.press_timer_s = 0.0
+      self.release_timer_s += _STEER_DT
+      # press_timer_s survives the window, so a re-press resumes the same grab.
+      if self.press_timer_s > 0.0 and self.release_timer_s >= _PRESS_RELEASE_S:
+        if (self.press_timer_s >= _PRESS_BLIP_MIN_S and self.stall_blip_cooldown_s <= 0.0
+            and self.stall_blip_frames_left <= 0
+            and abs(self.path_angle_last) < _BLIP_MAX_PATH_ANGLE):
+          self.stall_blip_frames_left = _STALL_BLIP_FRAMES
+        self.press_timer_s = 0.0
 
     # Stall-blip pulse in progress: hold lateral inactive (mode 0, all-zero signals -- the same
     # wire pattern as the human-turn override, no ford.h involvement) for _STALL_BLIP_FRAMES so the
@@ -478,26 +487,34 @@ class LateralAngleExt:
     # changes (see lane_center_trim.py). Applied here, before the deviation clip below, so the
     # trimmed value inherits every limiter this file already applies to kappa_cmd instead of
     # bypassing them.
+    current_curvature = self.get_current_curvature(CS)
+    _kappa_planner = kappa_cmd
     kappa_cmd = self.lane_center_trim.update(
       kappa_cmd, self.model, v_ego, self.enable_lane_positioning_ang,
       self.custom_path_offset_ang, self.lane_centering_strength_ang,
       CC.latActive, self.lane_change)
 
-    # BluePilot: clip kappa_cmd to current_curvature (measured, from yaw rate) +- CURVATURE_ERROR,
+    # BluePilot: the planner has first claim on the deviation budget clipped below; the trim takes
+    # what is left. Symmetric -- a one-sided form lets the trim subtract authority while the planner
+    # is already clipped short in a curve.
+    if v_ego > 9:
+      _room = max(self.bp_curvature_error - abs(_kappa_planner - current_curvature), 0.0)
+      kappa_cmd = _kappa_planner + float(clip(kappa_cmd - _kappa_planner, -_room, _room))
+
+    # BluePilot: clip kappa_cmd to current_curvature (measured) +- bp_curvature_error,
     # mirroring lateral_curv_ext.py's apply_ford_curvature_limits_ext exactly (same formula, same
-    # v_ego > 9 gate, same CarControllerParams.CURVATURE_ERROR tolerance). Without this, kappa_cmd
+    # v_ego > 9 gate, same tolerance). Without this, kappa_cmd
     # (and therefore path_angle, and the shadow_curvature sent to ford.h) can legitimately lead the
     # measured curvature by more than ford.h's angle-error tolerance during normal curve entry/exit
     # -- the shadow-curvature deviation check (ford_shadow_curvature_error_check) would then block
     # routinely, not just on genuine pothole/override divergence. Curvature mode has always clipped
     # here; this brings angle mode's actual steering intent in line with that proven behavior rather
     # than only clipping the value reported to panda (which would make the check a no-op).
-    current_curvature = self.get_current_curvature(CS)
     self.bp_curvature_deviation_limited = False
     if v_ego > 9:
       _kappa_cmd_pre_error_clip = kappa_cmd
-      kappa_cmd = float(clip(kappa_cmd, current_curvature - CarControllerParams.CURVATURE_ERROR,
-                            current_curvature + CarControllerParams.CURVATURE_ERROR))
+      kappa_cmd = float(clip(kappa_cmd, current_curvature - self.bp_curvature_error,
+                            current_curvature + self.bp_curvature_error))
       # BluePilot: did this clip actually constrain kappa_cmd this frame (deviation from measured,
       # not rate-of-change -- see carcontroller.py)?
       self.bp_curvature_deviation_limited = bool(abs(kappa_cmd - _kappa_cmd_pre_error_clip) > 1e-9)
@@ -595,8 +612,11 @@ class LateralAngleExt:
     # accumulator rather than resetting it; a closed gap or driver press ends the episode.
     self.stall_blip_cooldown_s = max(0.0, self.stall_blip_cooldown_s - _STEER_DT)
     _stall_gap = desired_curvature - current_curvature
+    _stall_gap_min = _STALL_GAP_RATIO * self.bp_curvature_error
     _stalled = (not CS.out.steeringPressed and not self.lane_change and v_ego > 9.0
-                and abs(_stall_gap) > _STALL_GAP_MIN
+                and abs(_stall_gap) > _stall_gap_min
+                # curve entry from straight satisfies the gap test by construction; require a real curve
+                and abs(current_curvature) > _stall_gap_min
                 and abs(desired_curvature) > abs(current_curvature))
     if _stalled:
       if self.bp_curvature_deviation_limited and self.stall_blip_cooldown_s <= 0.0:
@@ -608,7 +628,7 @@ class LateralAngleExt:
         self.stall_blip_count += 1
     else:
       self.stall_blip_hold_s = 0.0
-      if CS.out.steeringPressed or abs(_stall_gap) < 0.5 * _STALL_GAP_MIN:
+      if CS.out.steeringPressed or abs(_stall_gap) < 0.5 * _stall_gap_min:
         self.stall_blip_count = 0  # episode over: the car is tracking again or the driver took it
 
     ramp_type = 2
