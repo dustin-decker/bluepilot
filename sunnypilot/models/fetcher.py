@@ -261,7 +261,7 @@ def get_cached_bundles(params: Params, source: str) -> list[custom.ModelManagerS
 
 
 if __name__ == "__main__":
-  from openpilot.selfdrive.modeld.helpers import usbgpu_present as chestnut_present  # BluePilot: USB GPU probe
+  from openpilot.sunnypilot.models.helpers import chestnut_present  # BluePilot: gated USB GPU probe
   params = Params()
   model_fetcher = ModelFetcher(params)
   bundles = model_fetcher.get_bundles_for_source(ModelFetcher.active_source(chestnut_present()))

@@ -17,10 +17,9 @@ from openpilot.system.hardware.hw import Paths
 
 from cereal import messaging, custom
 from openpilot.sunnypilot.models.fetcher import ModelFetcher
-from openpilot.sunnypilot.models.helpers import (ACTIVE_BUNDLE_KEYS, get_active_bundle, get_selected_bundle,
+# BluePilot: deviceState has no chestnutPresent on this base; the gated USB GPU probe in helpers is used instead
+from openpilot.sunnypilot.models.helpers import (ACTIVE_BUNDLE_KEYS, chestnut_present, get_active_bundle, get_selected_bundle,
                                                   resolve_bundle_by_ref, validate_active_bundles, verify_file)
-# BluePilot: deviceState has no chestnutPresent on this base; probe the USB GPU directly
-from openpilot.selfdrive.modeld.helpers import usbgpu_present as chestnut_present
 # End BluePilot
 
 # (connect, read) seconds. read is per-request inactivity, not a total cap

@@ -16,8 +16,17 @@ from openpilot.common.params import Params
 from openpilot.common.swaglog import cloudlog
 from openpilot.sunnypilot.models.constants import Meta, MetaSimPose, MetaTombRaider
 from openpilot.system.hardware.hw import Paths
-# BluePilot: this base predates the Chestnut rename; the USB GPU probe is the same hardware check
-from openpilot.selfdrive.modeld.helpers import usbgpu_present as chestnut_present
+# BluePilot: this base predates the Chestnut rename; the USB GPU probe is the same hardware check.
+# Catalog selection (fetcher/manager/UI) and the modeld_v2 device choice all go through this one
+# gate. Big (AMD) model runtime has not been validated on BluePilot hardware, so the gate stays off
+# and every path sees the qcom catalog; flip CHESTNUT_MODELS_ENABLED once a device run confirms it.
+from openpilot.selfdrive.modeld.helpers import usbgpu_present
+
+CHESTNUT_MODELS_ENABLED = False
+
+
+def chestnut_present() -> bool:
+  return CHESTNUT_MODELS_ENABLED and usbgpu_present()
 # End BluePilot
 
 # SET ME TO THE EXACT JSON VERSION WE SET IN SUNNYPILOT_MODELS REPO

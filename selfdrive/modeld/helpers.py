@@ -46,11 +46,27 @@ def dump_oob(obj, f):
     tmp.seek(0)
     shutil.copyfileobj(tmp, f)
 
+def _read_exact(f, n: int, what: str) -> bytes:
+  data = f.read(n)
+  if len(data) != n:
+    raise EOFError(f"truncated OOB pickle: {what} expected {n} bytes, got {len(data)}")
+  return data
+
 def load_oob(f):
-  opcodes = f.read(struct.unpack('<q', f.read(8))[0])
+  # every length is checked so a truncated or corrupt artifact raises instead of feeding
+  # zero-filled weights to the model
+  opcodes = _read_exact(f, struct.unpack('<q', _read_exact(f, 8, "opcode length"))[0], "opcodes")
   def buffers():
     while (h := f.read(8)):
-      pb = pickle.PickleBuffer(bytearray(struct.unpack('<q', h)[0]))
-      f.readinto(pb)
+      if len(h) != 8:
+        raise EOFError(f"truncated OOB pickle: buffer header expected 8 bytes, got {len(h)}")
+      size = struct.unpack('<q', h)[0]
+      pb = pickle.PickleBuffer(bytearray(size))
+      view, got = memoryview(pb), 0
+      while got < size:
+        n = f.readinto(view[got:])
+        if not n:
+          raise EOFError(f"truncated OOB pickle: buffer expected {size} bytes, got {got}")
+        got += n
       yield pb
   return pickle.load(io.BytesIO(opcodes), buffers=buffers())
