@@ -9,9 +9,9 @@ import pytest
 
 import openpilot.sunnypilot.models.helpers as helpers
 import openpilot.sunnypilot.modeld_v2.modeld as modeld_module
-from openpilot.sunnypilot.modeld_v2.modeld import _find_driving_pkl
+from openpilot.sunnypilot.modeld_v2.modeld import _find_driving_pkl, _load_jits
 from openpilot.sunnypilot.modeld_v2.tests.conftest import DummyModel, DummyBundle, ARCHETYPES, CAM_W, CAM_H, \
-  SPLIT_VISION_INPUT_SHAPES, SPLIT_POLICY_INPUT_SHAPES
+  SPLIT_VISION_INPUT_SHAPES, SPLIT_POLICY_INPUT_SHAPES, make_pkl_data, write_pkl
 
 ModelState = modeld_module.ModelState
 
@@ -45,6 +45,26 @@ class TestFindDrivingPkl:
     result = _find_driving_pkl(bundle)
     assert result is not None
     assert 'driving_fof_tinygrad.pkl' in result
+
+
+# Pkl format: manifest artifacts are dump_oob streams, local compile_modeld.py output is a plain pickle
+
+class TestLoadJits:
+  @pytest.mark.parametrize("oob", [True, False])
+  def test_loads_both_formats(self, tmp_path, oob):
+    archetype = ARCHETYPES['vision_policy_split']
+    pkl_path = write_pkl(tmp_path, archetype, oob=oob)
+    jits = _load_jits(str(pkl_path))
+    assert jits['metadata'] == make_pkl_data(archetype)['metadata']
+    assert (CAM_W, CAM_H) in jits
+
+  def test_loads_chunked_oob(self, tmp_path):
+    from openpilot.common.file_chunker import chunk_file, get_chunk_targets
+    archetype = ARCHETYPES['supercombo_non20hz']
+    pkl_path = write_pkl(tmp_path, archetype, oob=True)
+    chunk_file(str(pkl_path), get_chunk_targets(str(pkl_path), 1 + 2 * 45 * 1024 * 1024))  # force 3 chunk files
+    assert not pkl_path.exists()
+    assert _load_jits(str(pkl_path))['metadata'] == make_pkl_data(archetype)['metadata']
 
 
 # Init — assertion guard

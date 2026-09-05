@@ -49,6 +49,16 @@ def _pkl_exists(path):
   return os.path.exists(path) or os.path.exists(get_manifest_path(path))
 
 
+def _load_jits(pkl_path):
+  from openpilot.common.file_chunker import open_file_chunked
+  from openpilot.selfdrive.modeld.helpers import load_oob
+
+  with open_file_chunked(pkl_path) as f:
+    # manifest v22+ artifacts are dump_oob streams: an 8-byte opcode length followed by the pickle (PROTO at byte 8).
+    # A plain pickle (local compile_modeld.py output) has its FRAME length there instead, never PROTO.
+    return load_oob(f) if f.peek(16)[8:9] == pickle.PROTO else pickle.load(f)
+
+
 def _find_driving_pkl(bundle):
   if (override := os.environ.get('COMBINED_MODEL_PKL')) and _pkl_exists(override):
     return override
@@ -103,10 +113,8 @@ class ModelState(ModelStateBase):
     from openpilot.sunnypilot.modeld_v2.compile_modeld import derive_frame_skip, make_split_input_queues
     from tinygrad.device import Device
 
-    from openpilot.common.file_chunker import read_file_chunked
-
     cloudlog.warning(f"loading combined pkl: {pkl_path}")
-    jits = pickle.loads(read_file_chunked(pkl_path))
+    jits = _load_jits(pkl_path)
 
     self.DEV = Device.DEFAULT
 

@@ -167,10 +167,14 @@ def make_pkl_data(archetype):
   }
 
 
-def write_pkl(tmp_path, archetype):
+def write_pkl(tmp_path, archetype, oob=False):
   pkl_path = tmp_path / 'driving_test_tinygrad.pkl'
   with open(pkl_path, 'wb') as f:
-    pickle.dump(make_pkl_data(archetype), f)
+    if oob:
+      from openpilot.selfdrive.modeld.helpers import dump_oob
+      dump_oob(make_pkl_data(archetype), f)
+    else:
+      pickle.dump(make_pkl_data(archetype), f)
   return pkl_path
 
 
