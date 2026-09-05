@@ -382,6 +382,9 @@ class TestManagerDownload(ManagerDownloadTestBase):
       # BluePilot: resuming verified chunks must also restore the loader's manifest.
       with open(get_manifest_path(base_path)) as f:
         assert f.read() == str(len(CHUNK_BODIES))
+      os.utime(get_manifest_path(base_path), (1, 1))
+      asyncio.run(self.manager._process_artifact(artifact, self.dest))
+      assert os.stat(get_manifest_path(base_path)).st_mtime == 1, "do not rewrite a manifest a model may be reading"
       # End BluePilot
     self.run_with_server(body)
 

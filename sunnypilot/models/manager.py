@@ -226,8 +226,9 @@ class ModelManagerSP:
       # BluePilot: a disconnected final response may leave all chunks but no manifest.
       if len(artifact.chunks) > 0:
         from openpilot.common.file_chunker import get_manifest_path
-        with open(get_manifest_path(full_path), 'w') as f:
-          f.write(str(len(artifact.chunks)))
+        if not os.path.exists(get_manifest_path(full_path)):
+          with open(get_manifest_path(full_path), 'w') as f:
+            f.write(str(len(artifact.chunks)))
       # End BluePilot
       artifact.downloadProgress.status = custom.ModelManagerSP.DownloadStatus.cached
       artifact.downloadProgress.progress = 100
