@@ -32,7 +32,7 @@ class VisualsLayoutMici(NavScroller):
       self.set_back_callback(back_callback)
 
     self.show_lead_vehicle = BigMultiParamToggleBP(
-      "Lower Right Display", "mici_complication",
+      "lower right display", "mici_complication",
       ["off", "lead car speed", "speed", "lead car distance", "time to lead car"],
     )
     self.rainbow_mode = BigParamControlBP("Rainbow Mode", "RainbowMode")
@@ -54,17 +54,18 @@ class VisualsLayoutMici(NavScroller):
     self.show_blindspot_ui = BigParamControlBP("Show Blindspot Overlay", "ShowBlindspotOverlay")
     self.show_brake_status = BigParamControlBP("Show Brake Status", "ShowBrakeStatus")
     self.animate_steering_wheel = BigParamControlBP("Animate Steering Wheel", "BPAnimateSteeringWheel")
+    self.show_live_delay = BigParamControlBP("show steering lag calibration", "BPShowLiveDelayIndicator")
     ensure_steering_wheel_icon_style_initialized(Params(), SteeringWheelIconStyle.COMMA_4)
     self.wheel_icon_style = BigMultiParamToggleBP(
-      "Wheel Icon Style", "BPSteeringWheelIconStyle", ["Comma 4", "Comma 3x"],
+      "wheel icon style", "BPSteeringWheelIconStyle", ["comma 4", "comma 3x"],
     )
     ensure_dm_icon_style_initialized(Params(), DMIconStyle.COMMA_4)
     self.dm_icon_style = BigMultiParamToggleBP(
-      "DM Icon Style", "BPDMStylingChoice", ["Comma 4", "Comma 3x"],
+      "dm icon style", "BPDMStylingChoice", ["comma 4", "comma 3x"],
     )
-    self.show_hybrid_power_flow = BigParamControlBP("Show Hybrid Power Flow", "FordPrefHybridPowerFlow")
+    self.show_hybrid_power_flow = BigParamControlBP("show hybrid power flow", "FordPrefHybridPowerFlow")
     self.hybrid_power_flow_style = BigMultiParamToggleBoolBP(
-      "Hybrid/EV Power Flow Style", "FordPrefHybridPowerFlowAlternate", ["flat", "round"],
+      "hybrid/ev power flow style", "FordPrefHybridPowerFlowAlternate", ["flat", "round"],
     )
 
     self._scroller.add_widgets([
@@ -78,6 +79,7 @@ class VisualsLayoutMici(NavScroller):
       self.rainbow_lane_lines,
       self.show_blindspot_ui,
       self.show_brake_status,
+      self.show_live_delay,
       self.animate_steering_wheel,
       self.wheel_icon_style,
       self.dm_icon_style,
@@ -94,6 +96,7 @@ class VisualsLayoutMici(NavScroller):
       ("BPRainbowLines", self.rainbow_lane_lines),
       ("ShowBlindspotOverlay", self.show_blindspot_ui),
       ("ShowBrakeStatus", self.show_brake_status),
+      ("BPShowLiveDelayIndicator", self.show_live_delay),
       ("BPAnimateSteeringWheel", self.animate_steering_wheel),
       ("FordPrefHybridPowerFlow", self.show_hybrid_power_flow),
     )
