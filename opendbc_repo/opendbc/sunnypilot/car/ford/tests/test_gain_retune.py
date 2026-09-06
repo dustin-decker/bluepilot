@@ -3,6 +3,7 @@ import json
 import math
 import random
 from dataclasses import replace
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import numpy as np
@@ -90,6 +91,34 @@ def test_lag_alignment_preserves_gain_and_speed_at_issue_time():
   assert seen[-1].speed == pytest.approx(15 + (159 - 4 - 20) * 0.001)
 
 
+def test_partial_authority_rejects_amplified_outlier():
+  est = AngleFactorEstimator(1.05)
+  assert not est.add_sample(20, 0.002, 0.0008, GainSample(1.04, 0.9, 0.1, 20))
+  assert est.n == 0
+
+
+@pytest.mark.parametrize('q', [0.1, 0.2, 0.5, 1.0])
+def test_verify_response_is_not_diluted_by_fixed_gain(q):
+  est = AngleFactorEstimator(1.05)
+  actual = GainSample(1 - q + q * 1.4, 1 - q, q, 20)
+  ideal_total = actual.fixed + q * 1.4 / 0.8
+  assert est.add_sample(20, 0.002, 0.002 * actual.total / ideal_total, actual)
+  assert est.recent_response(0)[1] == pytest.approx(0.8)
+
+
+def test_partial_authority_duration_survives_decay_and_serialization():
+  est = AngleFactorEstimator(1.05)
+  gain = gain_model(28, 0.0018, 1, 1)
+  for _ in range(12000):
+    assert est.add_sample(28, 0.0018, 0.0018, gain, weight=0.05)
+    est.decay(0.05)
+  assert est.weight_high > 400
+  assert est.s_w < est.weight_high  # do not inflate information or weaken stderr gates
+  restored = AngleFactorEstimator(1.05)
+  restored.from_dict(est.to_dict())
+  assert restored.to_dict() == est.to_dict()
+
+
 @pytest.mark.parametrize('phase', ['collecting', 'locked'])
 def test_old_evidence_and_locks_restart_without_resetting_factors(phase):
   donor = AutoCalPipeline(1.05)
@@ -104,10 +133,11 @@ def test_old_evidence_and_locks_restart_without_resetting_factors(phase):
   assert params.get('FordHighSpeedFactor_ang') == 1.1
 
 
-def test_closed_loop_mixed_gain_converges_without_overshoot():
+@pytest.mark.parametrize('lock_enabled', [False, True])
+def test_closed_loop_mixed_gain_converges_without_overshoot(lock_enabled):
   """Delay + first-order plant, physical partial-gain evidence, normal admission gates."""
   pipe = AutoCalPipeline(1.05)
-  pipe.lock_enabled = False
+  pipe.lock_enabled = lock_enabled
   applied = (1.0, 1.0)
   changes = []
   for _ in range(12):
@@ -131,3 +161,24 @@ def test_closed_loop_mixed_gain_converges_without_overshoot():
   assert applied[0] == pytest.approx(0.93, abs=0.03)
   assert applied[1] == pytest.approx(1.12, abs=0.03)
   assert all(0.90 <= lo <= 1.0 and 1.0 <= hi <= 1.15 for lo, hi in changes)
+  assert pipe.locked == lock_enabled
+
+
+@pytest.mark.parametrize('fingerprint', ['FORD_F_150_MK14', 'FORD_MUSTANG_MACH_E_MK1'])
+@pytest.mark.parametrize('strength', [1.0, 2.5])
+def test_armed_strategy_passes_actual_smoothed_gain_to_pipeline(fingerprint, strength):
+  ext = _Harness(_explorer_cp())
+  ext.CP.carFingerprint = fingerprint
+  ext.update_angle_params(_MockParams({'FordAngleAutoCal': True}))
+  ext.smoother.configure(True, strength)
+  ext.sm = {'liveDelay': SimpleNamespace(lateralDelay=0.2, status='estimated')}
+  cs = _CS(vEgoRaw=25, vEgo=25)
+  cs.out.wheelSpeeds = SimpleNamespace(fl=25, fr=25, rl=25, rr=25)
+  cs.out.aEgo = cs.out.steeringTorque = 0.0
+  with patch.object(ext, 'get_current_curvature', return_value=0.002), patch.object(ext.autocal_ctl, 'feed') as feed:
+    for k in [0.002, 0.001, 0.002]:
+      ext.update_angle_strategy(_CC(), cs, _Actuators(k), ext.CP)
+      evidence = feed.call_args.args[0]
+      assert evidence.gain == GainSample(ext.curvature_factor, (1 - ext._gain_blend) * ext.low_gain_calc,
+                                         ext._gain_blend, 25)
+      assert feed.call_args.kwargs['delay_estimated']

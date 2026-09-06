@@ -270,10 +270,11 @@ class AngleFactorEstimator:
     self.s_w = 0.0   # sum w
     self.s_wy2 = 0.0  # sum w*y^2 (for residual/stderr)
     self.n = 0
+    self.duration = [0.0, 0.0]  # admitted seconds by anchor; fit information still uses q^2
     # Left/right split per anchor half for bank-bias detection: {(half, dir): [w, wy]}
     # half: 0 = alpha < 0.5 (low anchor side), 1 = high side; dir: 0 = left, 1 = right.
     self.lr = {(h, d): [0.0, 0.0] for h in (0, 1) for d in (0, 1)}
-    # Fast-forgetting per-anchor response ratio r = meas/cmd (TAU_RECENT_S): "what is the
+    # Fast-forgetting adjustable-branch response ratio (TAU_RECENT_S): "what is the
     # car doing RIGHT NOW under the current factors" — the adjust-then-verify check and
     # the live dashboard read this, the long-memory fit above never does.
     self.recent = {0: [0.0, 0.0], 1: [0.0, 0.0]}  # half -> [w, sum w*r]
@@ -307,6 +308,9 @@ class AngleFactorEstimator:
     y = (gain.total / r - gain.fixed) / gain.blend
     if not math.isfinite(y) or y <= 0:
       return False
+    r_adjustable = (gain.total - gain.fixed) / (gain.blend * y)
+    if not MIN_RATIO <= r_adjustable <= MAX_RATIO:
+      return False
     a = speed_alpha(v_ego)
     w = float(weight) * gain.blend ** 2
     la = 1.0 - a
@@ -318,13 +322,15 @@ class AngleFactorEstimator:
     self.s_w += w
     self.s_wy2 += w * y * y
     self.n += 1
+    self.duration[0] += weight * la
+    self.duration[1] += weight * a
     half = 0 if a < 0.5 else 1
     acc = self.lr[(half, 0 if kappa_cmd > 0 else 1)]
-    acc[0] += w
-    acc[1] += w * y
+    acc[0] += weight
+    acc[1] += weight * y
     rec = self.recent[half]
-    rec[0] += w
-    rec[1] += w * r
+    rec[0] += weight
+    rec[1] += weight * r_adjustable
     return True
 
   def decay(self, seconds: float):
@@ -340,6 +346,7 @@ class AngleFactorEstimator:
       rec[1] *= fr
 
   def scale(self, f: float):
+    self.duration = [t * f for t in self.duration]
     self.s_ll *= f
     self.s_lh *= f
     self.s_hh *= f
@@ -356,7 +363,8 @@ class AngleFactorEstimator:
 
   def recent_response(self, half: int):
     """(weight, mean ratio) of the fast tracker for one anchor half; ratio is None until
-    any evidence exists. Ratio 0.93 reads as 'turns 93% of requested'."""
+    any evidence exists. Ratio 0.93 means 93% delivery of the adjustable branch,
+    not 93% of the total curvature when a fixed low-curve contribution is present."""
     w, s = self.recent[half]
     if w <= 1e-6:
       return 0.0, None
@@ -364,12 +372,12 @@ class AngleFactorEstimator:
 
   @property
   def weight_low(self) -> float:
-    """Effective sample weight attributed to the low anchor."""
-    return self.s_ll + self.s_lh
+    """Admitted seconds attributed to the low anchor; stderr retains q^2 information."""
+    return self.duration[0]
 
   @property
   def weight_high(self) -> float:
-    return self.s_hh + self.s_lh
+    return self.duration[1]
 
   def lr_divergence(self, half: int) -> float:
     """|mean_left - mean_right| of the implied ideal gain for one anchor half.
@@ -431,6 +439,7 @@ class AngleFactorEstimator:
       "s_ll": self.s_ll, "s_lh": self.s_lh, "s_hh": self.s_hh,
       "s_ly": self.s_ly, "s_hy": self.s_hy, "s_w": self.s_w, "s_wy2": self.s_wy2,
       "n": self.n,
+      "duration": self.duration[:],
       "lr": [self.lr[(h, d)][:] for h in (0, 1) for d in (0, 1)],
       "recent": [self.recent[0][:], self.recent[1][:]],
     }
@@ -444,6 +453,7 @@ class AngleFactorEstimator:
     self.s_w = float(d["s_w"])
     self.s_wy2 = float(d["s_wy2"])
     self.n = int(d["n"])
+    self.duration = [float(t) for t in d.get("duration", [0.0, 0.0])]
     flat = d.get("lr")
     if isinstance(flat, list) and len(flat) == 4:
       for i, (h, dd) in enumerate(((0, 0), (0, 1), (1, 0), (1, 1))):

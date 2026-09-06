@@ -64,9 +64,11 @@ AUTO_CAL_BARS_WIDTH = round(AutoCalBars.WIDTH * AUTO_CAL_SCALE)
 AUTO_CAL_BARS_HEIGHT = round(AutoCalBars.HEIGHT * AUTO_CAL_SCALE)
 
 
-def auto_cal_bars_rect(content_rect: rl.Rectangle) -> rl.Rectangle:
-  """Center the temporary auto-cal gauges below the steering-wheel button."""
+def auto_cal_bars_rect(content_rect: rl.Rectangle, developer_ui=DeveloperUiState.OFF) -> rl.Rectangle:
+  """Center below the wheel, moving left when the right diagnostic panel is visible."""
   button_left = content_rect.x + content_rect.width - UI_BORDER_SIZE - BTN_SIZE
+  if developer_ui in (DeveloperUiState.RIGHT, DeveloperUiState.BOTH):
+    button_left -= 224  # SP diagnostic panel: 184 px plus two 20 px borders.
   return rl.Rectangle(
     button_left + (BTN_SIZE - AUTO_CAL_BARS_WIDTH) / 2,
     content_rect.y + UI_BORDER_SIZE + BTN_SIZE + AUTO_CAL_BUTTON_GAP + AUTO_CAL_LABEL_FONT_SIZE + AUTO_CAL_LABEL_GAP,
@@ -322,7 +324,7 @@ class AugmentedRoadViewBP(CameraViewBP, AugmentedRoadView, BlindspotRendererMixi
     if not self._auto_cal_bars.in_progress:
       return
 
-    bars_rect = auto_cal_bars_rect(content_rect)
+    bars_rect = auto_cal_bars_rect(content_rect, ui_state.developer_ui)
     font = gui_app.font(FontWeight.SEMI_BOLD)
     label_size = measure_text_cached(font, AUTO_CAL_LABEL, AUTO_CAL_LABEL_FONT_SIZE)
     label_pos = rl.Vector2(
