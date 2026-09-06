@@ -27,7 +27,7 @@ def replay(paths, strength=1.0):
       raise ValueError(f'Expected a local rlog file: {path}')
     for msg in LogReader(path, sort_by_time=True):
       name = msg.which()
-      if name not in ('carParams', 'carParamsSP', 'carState', 'carControl', 'modelV2', 'liveParameters', 'liveDelay'):
+      if name not in ('carParams', 'carParamsSP', 'carState', 'carControl', 'modelV2', 'liveParameters', 'liveDelay', 'controllerStateBP'):
         continue
       if not msg.valid and name not in ('carParams', 'carParamsSP'):
         latest.pop(name, None)
@@ -59,6 +59,10 @@ def replay(paths, strength=1.0):
       assert all(math.isfinite(getattr(result, key)) for key in ('apply_curvature', 'path_angle', 'path_offset', 'curvature_rate'))
       assert abs(result.path_angle) <= 0.5
       counts['frames'] += 1
+      counts['armed_frames'] += int(ext.autocal_ctl.enabled)
+      counts['delay_estimated_frames'] += int(str(latest['liveDelay'].status) == 'estimated')
+      if 'controllerStateBP' in latest:
+        counts['recorded_mode_' + str(latest['controllerStateBP'].activeLateralMode)] += 1
       counts['lat_active'] += int(latest['carControl'].latActive)
       counts['rate_limited'] += int(ext.bp_angle_rate_limited)
       counts['deviation_limited'] += int(ext.bp_curvature_deviation_limited)
@@ -66,7 +70,11 @@ def replay(paths, strength=1.0):
       counts['autocal_errors'] += int(bool(params.get('FordAngleAutoCalError')))
   assert counts['frames'] > 0, 'No replayable frames'
   assert counts['autocal_errors'] == 0, params.get('FordAngleAutoCalError')
-  return dict(counts)
+  counts['counterfactual_admitted_samples'] = ext.autocal_ctl.pipeline.est.n if ext.autocal_ctl.pipeline else 0
+  result = dict(counts)
+  if ext.autocal_ctl.pipeline:
+    result['quality_rejections'] = ext.autocal_ctl.pipeline.quality.counters
+  return result
 
 
 if __name__ == '__main__':
