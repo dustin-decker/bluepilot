@@ -1,0 +1,15 @@
+default_agents = ["codex", "claude", "opencode", "cursor", "pi"]
+nested = false
+
+[mcp]
+enabled = false
+
+# Commit generated instructions/skills so agents work immediately after cloning.
+[gitignore]
+enabled = false
+
+[backup]
+enabled = false
+
+[skills]
+enabled = true
