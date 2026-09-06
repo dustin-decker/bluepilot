@@ -2,8 +2,12 @@
 
 The angle strategy (lateral_angle_ext.py) computes, for the high-curvature branch:
 
-  factor(v) = interp(v, [V_LOW, V_HIGH], [1.30 * LOW_FACTOR, platform_gain * HIGH_FACTOR])
-  path_angle = kappa_cmd * v * factor
+  factor(v) = interp(v, [V_LOW, V_HIGH], [1.40 * LOW_FACTOR, 1.20 * platform_gain * HIGH_FACTOR])
+  total_gain = fixed_low_curve_contribution + curve_blend * factor(v)
+  path_angle = kappa_cmd * v * total_gain
+
+The fitted high-curve gain is (total_gain / measured_response_ratio - fixed) / curve_blend.
+The actual gain, blend and speed travel with each command through delay/apex alignment.
 
 LOW_FACTOR / HIGH_FACTOR (FordLowSpeedFactor_ang / FordHighSpeedFactor_ang) are per-car
 constants the driver is asked to hand-tune with the +/- buttons by comparing requested turn
@@ -50,9 +54,10 @@ class GainSample(NamedTuple):
 @dataclass(frozen=True)
 class Frame:
   """One 20 Hz lateral frame of evidence inputs, shared verbatim by the onboard
-  controller and the offline analyzer. Every field is required — defaults on physical
+  controller and the offline analyzer. Physical fields are required — defaults on physical
   signals (a_ego, saturated, ...) were a silent-wrong-answer risk whenever the two
-  consumers drifted on parameter order."""
+  consumers drifted on parameter order. Only gain is optional for pure high-branch fixtures;
+  production callers must supply the actual blended GainSample."""
   v_ego: float
   kappa_cmd: float
   kappa_meas: float
@@ -249,7 +254,7 @@ class AngleFactorEstimator:
   curvature ratio and g_i the gain that was IN FORCE when the sample was taken (recorded
   per sample — the applied factors move while the nudger works, and old samples stay valid).
   F_ideal(v) = (1-a)*A + a*B with a = speed_alpha(v), A = ideal low anchor
-  (1.30 * LOW_FACTOR), B = ideal high anchor (gain * HIGH_FACTOR). Linear in (A, B) ->
+  (1.40 * LOW_FACTOR), B = ideal high anchor (1.20 * platform gain * HIGH_FACTOR). Linear in (A, B) ->
   closed-form normal equations, accumulated incrementally so the onboard hook carries
   O(1) state — and that state serializes to a dict for cross-drive persistence.
   """

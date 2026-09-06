@@ -110,7 +110,7 @@ def test_closed_loop_mixed_gain_converges_without_overshoot():
   pipe.lock_enabled = False
   applied = (1.0, 1.0)
   changes = []
-  for cycle in range(12):
+  for _ in range(12):
     for v, k in [(10, 0.012), (32, -0.0015)]:
       pipe.idle()
       history = []
