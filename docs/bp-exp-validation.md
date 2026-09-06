@@ -45,6 +45,72 @@ PYTHONPATH=/data/openpilot /usr/local/venv/bin/python \
 
 The harness reuses the test controller and in-memory Params. Recorded vehicle response belongs to the old controller, so counterfactual admissions are **not calibration estimates**. Synthetic closed-loop tests are simplified plants, not proof of stability on the real vehicle. Historical route replay cannot establish the retuned controller's physical closed-loop behavior.
 
+## Selecting local routes and inspecting admission
+
+`tools/route_inventory.py` reads local qlogs (rlog fallback) and emits JSONL. It uses
+recorded wall clocks and an explicit timezone, not filenames or modification times:
+
+```sh
+python tools/route_inventory.py /data/media/0/realdata \
+  --date 2026-09-03 --timezone America/Los_Angeles --ford-autocal
+```
+
+Use repeatable `--route ROUTE` arguments to restrict a scan. Each row includes the
+segment/log path, local start, observed duration, valid speed-sample counts in m/s
+bands, recorded lateral mode and optional `ford_candidate_low/high` scores. Missing
+clocks are reported as null and excluded by a date filter. Repeated route-start
+metadata does not inflate segment duration. Read failures go to stderr and produce
+a nonzero exit status; the tool does not download, preserve, delete or alter routes.
+
+Ford scores reuse the production speed/curvature/acceleration and driver-grip gates,
+but are only a **shortlisting heuristic**: qlogs can miss brief inputs, and these
+counts do not include full delay matching, limiters or estimator quality checks.
+They are sample counts, not calibration seconds. Recheck shortlisted contiguous
+segments in chronological order with the full-rlog harness above.
+
+Thursday September 3 local-time recordings retained on the device:
+
+| Route | Available segments | Approximate retained minutes |
+| --- | --- | ---: |
+| `0000001a--d8a627a07c` | 34–91 | 58 |
+| `0000001b--ca636b7372` | 0–48 | 49 |
+| `0000001c--953295a9e3` | 0–87 | 88 |
+
+That is about 195 retained minutes, with low-speed and highway coverage. Route 1a's
+first 34 segments are absent locally; including them would give roughly 229 minutes,
+consistent with the expected four hours. The evening logs cross into September 4
+**UTC**, but belong to Thursday in Los Angeles.
+
+Follow-up full-rlog replay (neutral manual factors in isolated in-memory Params):
+
+| Route/segments | Smoothing strength | Frames | Accepted low-side / high-side | Negative / positive |
+| --- | ---: | ---: | ---: | ---: |
+| 1a / 48–51 | 1.0 | 4,324 | 40 / 46 | 81 / 5 |
+| 1b / 21–22 | 1.0 | 1,574 | 0 / 60 | 0 / 60 |
+| 1c / 39–42 | 1.0 | 4,504 | 7 / 167 | 0 / 174 |
+| 1a / 48–51 | 2.5 | 4,324 | 47 / 46 | 84 / 9 |
+
+Low/high-side labels split at the midpoint of the production speed anchors; an
+individual sample contributes interpolated evidence to both anchors. The first run
+accumulated 2.252/2.036 seconds of low/high evidence; the second 0.395/2.586 seconds.
+The third accumulated 3.098/5.512 seconds; maximum smoothing on the first section
+gave 2.528/2.104 seconds. None nudged factors. Sparse, one-sided evidence remains insufficient; admission
+gates were not relaxed. Straight-road and driver-grip-heavy sections instead exercise
+rejection paths. All runs above reported zero autocal errors and stock/openpilot
+recorded mode, so accepted samples **do not establish valid factor recovery**.
+
+The harness now reports overlapping rejection diagnostics and accepted speed/sign
+counts, refreshes simulated parameters on the controller cadence, and resets strategy
+state after discontinuities. An observer regression verifies that diagnostics leave
+admission and persistence unchanged. It does not reconstruct the raw PSCM limit bit
+(`lat_ctl_lim_stat` is zero); this is another reason not to treat it as exact historical
+controller reproduction. No device calibration parameters were changed.
+
+Follow-up checks: all changed Python files pass Ruff; the local Ford suite plus route
+inventory tests pass (200 tests and seven subtests, external params/messaging shim).
+The three-route inventory completed on-device without read errors. The four full-log
+runs above cover 10,402 distinct frames, plus 4,324 repeated at maximum smoothing.
+
 ## Adversarial review
 
 Claude Fable 5.1 reviewed the integration and specifically the autocal adaptation, followed by a second mathematical review. It read the working tree; its Bash permission was denied, so it did not independently inspect Git diffs or run tests.
