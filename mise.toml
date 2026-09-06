@@ -1,0 +1,11 @@
+[tools]
+node = "22.23.2"
+"npm:@intellectronica/ruler" = "0.3.44"
+
+[tasks."agents:generate"]
+description = "Generate agent rules and skills from .ruler"
+run = "ruler apply --local-only"
+
+[tasks."agents:preview"]
+description = "Preview generated agent rules and skills without writing"
+run = "ruler apply --local-only --dry-run"

@@ -101,3 +101,15 @@ bluepilot/agent_info/
 bluepilot/agent_tools/
 bluepilot/local_files/
 tools/jotpluggler/layouts/Path_Angle_Analysis.json
+
+# Ruler sources and generated skills are versioned; keep personal Claude settings ignored.
+!.ruler/skills/**/SKILL.md
+!CLAUDE.md
+!.claude/
+.claude/*
+!.claude/skills/
+!.claude/skills/**/SKILL.md
+!.agents/skills/**/SKILL.md
+!.opencode/skills/**/SKILL.md
+!.cursor/skills/**/SKILL.md
+!.pi/skills/**/SKILL.md
