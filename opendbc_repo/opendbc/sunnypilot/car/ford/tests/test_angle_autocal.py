@@ -16,6 +16,7 @@ from opendbc.sunnypilot.car.ford.angle_autocal import (
   VERIFY_MIN_WEIGHT, VERIFY_FAIL_HOLD_WEIGHT,
   LOCK_DEADBAND, LOCK_STABLE_S,
 )
+from opendbc.sunnypilot.car.ford.values_ext import HIGH_ANCHOR_SCALE
 
 PLATFORM_GAIN_HIGH = 1.05  # Mach-E
 DT = 0.05
@@ -23,7 +24,7 @@ DT = 0.05
 
 def applied_gain(v, low_factor, high_factor):
   a = speed_alpha(v)
-  return (1.0 - a) * (LOW_ANCHOR_BASE * low_factor) + a * (PLATFORM_GAIN_HIGH * high_factor)
+  return (1.0 - a) * (LOW_ANCHOR_BASE * low_factor) + a * (HIGH_ANCHOR_SCALE * PLATFORM_GAIN_HIGH * high_factor)
 
 
 def ideal_gain(v, true_low, true_high):
@@ -621,7 +622,7 @@ class TestAdjustVerify:
     # 'ready' predicate holds and only the lock_enabled check stands between
     # stable_s and the freeze.
     pipe = AutoCalPipeline(PLATFORM_GAIN_HIGH)
-    feed_plant(pipe.est, 1.0, 1.0, speeds=[10, 28], n_per_speed=1400)
+    feed_plant(pipe.est, 1.0, 1.0, speeds=[10, 32], n_per_speed=1400)
     pipe.lock_enabled = False
     pipe.stable_s = LOCK_STABLE_S - 0.1
     _feed_low(pipe, (1.0, 1.0), 3.0, 1.0, 1.0)
@@ -839,7 +840,7 @@ class TestOnboardGlue:
   def test_arming_restores_serialized_evidence(self):
     donor = AutoCalPipeline(PLATFORM_GAIN_HIGH)
     feed_plant(donor.est, 1.05, 1.05, speeds=[10, 28], n_per_speed=200)
-    state = json.dumps({"v": 1, "phase": "collecting", "pipe": donor.to_dict()})
+    state = json.dumps({"v": 2, "phase": "collecting", "pipe": donor.to_dict()})
     ext = self._ext()
     p = _MockParams({"FordAngleAutoCal": 1, "FordAngleAutoCalState": state,
                      "FordLowSpeedFactor_ang": "1.00", "FordHighSpeedFactor_ang": "1.00"})
@@ -850,16 +851,16 @@ class TestOnboardGlue:
 
   def test_locked_json_never_arms(self):
     ext = self._ext()
-    state = json.dumps({"v": 1, "phase": "locked", "pipe": {}})
+    state = json.dumps({"v": 2, "phase": "locked", "pipe": {}})
     p = _MockParams({"FordAngleAutoCal": 1, "FordAngleAutoCalState": state})
     ext.update_angle_params(p)
     assert ext.autocal_ctl.pipeline is None and ext.autocal_ctl.done and not ext.autocal_enabled
 
-  def test_legacy_done_state_never_arms(self):
+  def test_legacy_done_state_restarts_for_new_gain_model(self):
     ext = self._ext()
     p = _MockParams({"FordAngleAutoCal": 1, "FordAngleAutoCalState": "done low=1.02 high=1.15"})
     ext.update_angle_params(p)
-    assert ext.autocal_ctl.pipeline is None and ext.autocal_ctl.done and not ext.autocal_enabled
+    assert ext.autocal_ctl.pipeline is not None and not ext.autocal_ctl.done and ext.autocal_enabled
 
   def test_garbage_state_starts_fresh(self):
     ext = self._ext()
@@ -921,7 +922,7 @@ class TestOnboardGlue:
     donor = AutoCalPipeline(PLATFORM_GAIN_HIGH)
     feed_plant(donor.est, 1.05, 1.05, speeds=[10, 28], n_per_speed=200)
     donor.locked = True
-    state = json.dumps({"v": 1, "phase": "locked", "pipe": donor.to_dict()})
+    state = json.dumps({"v": 2, "phase": "locked", "pipe": donor.to_dict()})
     ext = self._ext()
     p = _MockParams({"FordAngleAutoCal": 1, "FordAngleAutoCalState": state,
                      "FordAngleAutoCalLock": 0,
@@ -940,7 +941,7 @@ class TestOnboardGlue:
     # The "erase calibration memory" button: evidence, error log, the LOCK, and the
     # factors themselves all go back to neutral — a finished calibration can be retried.
     ext = self._ext()
-    state = json.dumps({"v": 1, "phase": "locked", "pipe": {}})
+    state = json.dumps({"v": 2, "phase": "locked", "pipe": {}})
     p = _MockParams({"FordAngleAutoCal": 1, "FordAngleAutoCalState": state,
                      "FordAngleAutoCalReset": 1,
                      "FordLowSpeedFactor_ang": "1.12", "FordHighSpeedFactor_ang": "1.20"})

@@ -35,7 +35,16 @@ from dataclasses import dataclass
 from typing import NamedTuple
 
 # The strategy owns the gain model; this module (and the offline analyzer) consume it.
-from opendbc.sunnypilot.car.ford.values_ext import V_LOW, V_HIGH, LOW_ANCHOR_BASE
+from opendbc.sunnypilot.car.ford.values_ext import V_LOW, V_HIGH, LOW_ANCHOR_BASE, HIGH_ANCHOR_SCALE
+
+
+# BluePilot: carry the gain model with each command through delay alignment and apex matching.
+class GainSample(NamedTuple):
+  total: float
+  fixed: float  # (1 - blend) * low-curvature gain; not adjusted by the two fitted factors
+  blend: float
+  speed: float
+# End BluePilot
 
 
 @dataclass(frozen=True)
@@ -57,10 +66,11 @@ class Frame:
   low_factor: float
   high_factor: float
   lateral_delay: float  # liveDelay.lateralDelay (s) — evidence is aligned against cmd(t - delay)
+  gain: GainSample | None = None  # BluePilot: None is the pure high-branch synthetic-test model.
 
 # Sample admission gates (mirrored by both the offline analyzer and the onboard hook).
 MIN_SPEED = 9.5             # m/s; below this the deviation clip is off and measurement is noisy
-MIN_KAPPA = 0.001           # 1/m; fully inside the high-curvature branch the factors scale
+MIN_KAPPA = 0.001           # 1/m; reject near-straight noise, not a gain-knee assumption
 # --- Lag-aligned steadiness --------------------------------------------------------------
 # The measurement lags the command by the actuation delay (liveDelay: ~0.15-0.30s typical,
 # up to ~0.42s observed). Evidence ratios are therefore taken against the command from
@@ -245,7 +255,7 @@ class AngleFactorEstimator:
   """
 
   def __init__(self, platform_gain_high: float):
-    self.platform_gain_high = float(platform_gain_high)
+    self.platform_gain_high = HIGH_ANCHOR_SCALE * float(platform_gain_high)
     # Normal-equation accumulators for min sum w*((1-a)A + aB - y)^2
     self.s_ll = 0.0  # sum w*(1-a)^2
     self.s_lh = 0.0  # sum w*(1-a)*a
@@ -264,13 +274,22 @@ class AngleFactorEstimator:
     self.recent = {0: [0.0, 0.0], 1: [0.0, 0.0]}  # half -> [w, sum w*r]
 
   def add_sample(self, v_ego: float, kappa_cmd: float, kappa_meas: float,
-                 applied_gain: float, weight: float = 1.0) -> bool:
+                 applied_gain: float | GainSample, weight: float = 1.0) -> bool:
     """Add one curve observation taken while applied_gain was in force.
 
     kappa_cmd is the curvature the strategy converted to path_angle (post any clips);
     kappa_meas is the pinion-derived measured curvature. Both in OP sign convention —
     only same-sign, above-threshold pairs are accepted. Returns True if accepted.
     """
+    # BluePilot: G = fixed + q * ((1-a)A + aB). Fit only the adjustable part.
+    # Dividing by q amplifies noise, so weight by q^2 and reject negligible authority.
+    gain = applied_gain if isinstance(applied_gain, GainSample) else GainSample(float(applied_gain), 0.0, 1.0, v_ego)
+    v_ego = gain.speed  # speed when the aligned command was issued, not at measurement time
+    if not all(math.isfinite(x) for x in (*gain, kappa_cmd, kappa_meas, weight)):
+      return False
+    if gain.total <= 0 or gain.fixed < 0 or not 0.05 <= gain.blend <= 1.0 or weight <= 0:
+      return False
+    # End BluePilot
     if abs(kappa_cmd) < MIN_KAPPA or v_ego < MIN_SPEED:
       return False
     if abs(kappa_cmd) * v_ego * v_ego > MAX_LAT_ACCEL:
@@ -280,9 +299,11 @@ class AngleFactorEstimator:
     r = kappa_meas / kappa_cmd
     if not (MIN_RATIO <= r <= MAX_RATIO):
       return False
-    y = float(applied_gain) / r
+    y = (gain.total / r - gain.fixed) / gain.blend
+    if not math.isfinite(y) or y <= 0:
+      return False
     a = speed_alpha(v_ego)
-    w = float(weight)
+    w = float(weight) * gain.blend ** 2
     la = 1.0 - a
     self.s_ll += w * la * la
     self.s_lh += w * la * a
@@ -504,7 +525,7 @@ class _PeakFrame(NamedTuple):
   kappa_cmd: float
   kappa_meas: float
   v_ego: float
-  gain: float
+  gain: float | GainSample
   clean: bool
 
 
@@ -540,7 +561,7 @@ class PeakMatcher:
       self.buf[i] = self.buf[i]._replace(clean=False)
 
   def push(self, kappa_cmd: float, kappa_meas: float, v_ego: float,
-           applied_gain: float, ok: bool) -> list[tuple]:
+           applied_gain: float | GainSample, ok: bool) -> list[tuple]:
     """Advance one frame. Returns samples to commit: (v, kappa_cmd, kappa_meas,
     applied_gain) tuples (already median-filtered)."""
     self.buf.append(_PeakFrame(kappa_cmd, kappa_meas, v_ego, applied_gain, ok))
@@ -679,7 +700,7 @@ class _StagedSample:
   v_ego: float
   kappa_cmd: float
   kappa_meas: float
-  gain: float
+  gain: float | GainSample
   weight: float
 
 
@@ -695,7 +716,7 @@ class AutoCalPipeline:
   """
 
   def __init__(self, platform_gain_high: float, dt: float = 0.05):
-    self.platform_gain_high = float(platform_gain_high)
+    self.platform_gain_high = HIGH_ANCHOR_SCALE * float(platform_gain_high)
     self.est = AngleFactorEstimator(platform_gain_high)
     self.gate = SteadyStateGate(dt=dt)
     self.quality = QualityMonitor(dt=dt)
@@ -707,7 +728,7 @@ class AutoCalPipeline:
     self._decay_accum = 0.0
     # Lag alignment: ring of recent (kappa_cmd, applied_gain) so this frame's measurement
     # can be ratioed against the command (and the gain in force) when it was ISSUED.
-    self._hist: list[tuple[float, float]] = []
+    self._hist: list[tuple[float, float | GainSample]] = []
     self._hist_max = int(round(LAG_MAX_S / dt)) + 2
     # Nudge / lock bookkeeping (persisted).
     self.since_nudge_s = NUDGE_PERIOD_S  # first nudge allowed as soon as evidence permits
@@ -745,7 +766,7 @@ class AutoCalPipeline:
     if self.locked:
       return []
     v_ego, kappa_cmd, kappa_meas = frame.v_ego, frame.kappa_cmd, frame.kappa_meas
-    gain_now = self.applied_gain(v_ego, frame.low_factor, frame.high_factor)
+    gain_now = frame.gain if frame.gain is not None else self.applied_gain(v_ego, frame.low_factor, frame.high_factor)
 
     # Lag alignment: this frame's MEASUREMENT answers the command from lateral_delay ago.
     # All steadiness gating and every steady-state ratio below use that reference pair

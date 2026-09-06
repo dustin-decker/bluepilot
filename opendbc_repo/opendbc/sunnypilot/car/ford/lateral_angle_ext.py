@@ -39,14 +39,14 @@ from numpy import clip, interp
 from opendbc.car import DT_CTRL
 from opendbc.car.lateral import apply_std_steer_angle_limits
 from opendbc.car.ford.values import CarControllerParams
-from opendbc.sunnypilot.car.ford.angle_autocal import Frame
+from opendbc.sunnypilot.car.ford.angle_autocal import Frame, GainSample
 from opendbc.sunnypilot.car.ford.angle_autocal_controller import AutoCalController
 from opendbc.sunnypilot.car.ford.angle_smoothing import AngleSmoother
 from opendbc.sunnypilot.car.ford.lateral_curv_ext import LateralResult
 from opendbc.sunnypilot.car.ford.human_turn import HumanTurnDetector
 from opendbc.sunnypilot.car.ford.lane_center_trim import LaneCenterTrim
 from opendbc.sunnypilot.car.ford.values_ext import (BP_ANGLE_LIMITS, platform_gains,
-                                                    V_LOW, V_HIGH, LOW_ANCHOR_BASE)
+                                                    V_LOW, V_HIGH, LOW_ANCHOR_BASE, HIGH_ANCHOR_SCALE, curve_gain_blend)
 from selfdrive.modeld.constants import ModelConstants
 
 
@@ -135,6 +135,10 @@ class LateralAngleExt:
   def __init__(self, CP=None, CP_SP=None):
     # Predicted-curvature blend for path_angle: pred * b + desired * (1-b); b from ``FordPathAngleBlendRatio``
     self.path_angle_blend_ratio = _FORD_PATH_ANGLE_BLEND_RATIO_DEFAULT
+    # Low pass filter values used in calculating kappa
+    self.speed_factor = None  #initialize as None, assign raw value on first cycle then filter
+    self.kappa_factor = None
+    self.b_blend = None
     # Max extra VLT above t_base; from ``FordVLTExtraMax`` param
     self.vlt_extra_max = _VLT_T_EXTRA_MAX
     # Telemetry: final path_angle (rad) after limits (see bp_card_publisher)
@@ -303,7 +307,11 @@ class LateralAngleExt:
             driver_torque=float(CS.out.steeringTorque), a_ego=float(CS.out.aEgo),
             ws_spread=max(ws_vals) - min(ws_vals),
             low_factor=self.low_speed_curv_factor, high_factor=self.high_speed_curv_factor,
-            lateral_delay=float(self.sm['liveDelay'].lateralDelay)),
+            lateral_delay=float(self.sm['liveDelay'].lateralDelay),
+            # BluePilot: preserve the actual gain mix, including optional schedule smoothing.
+            gain=GainSample(float(self.curvature_factor), float((1.0 - self._gain_blend) * self.low_gain_calc),
+                            self._gain_blend, float(CS.out.vEgoRaw))),
+            # End BluePilot
       delay_estimated=str(self.sm['liveDelay'].status) == "estimated")
 
   def _reset_angle_signals(self, CS):
@@ -444,7 +452,13 @@ class LateralAngleExt:
     #    collapses the prediction weight to ~15% there.
     _t_entering = float(clip(self.sm['liveDelay'].lateralDelay, 0.1, 0.15)) + _DT_MDL
     _t_base = float(clip(self.sm['liveDelay'].lateralDelay, 0.1, 0.30)) + _DT_MDL
-    _speed_factor = float(interp(v_ego, [_VLT_V_LOW_MS, _VLT_V_HIGH_MS], [1.0, 0.0]))
+    target_speed_factor = float(interp(v_ego, [_VLT_V_LOW_MS, _VLT_V_HIGH_MS], [1.0, 0.0]))
+    #Low Pass Filter for _speed_factor calculation
+    if self.speed_factor is None:
+      self.speed_factor = target_speed_factor
+    else:
+      self.speed_factor = 0.80 * self.speed_factor + 0.20 * target_speed_factor
+    _speed_factor = float(clip(self.speed_factor, 0.0, 1.0))
     # Direction-aware kappa factor: on curve ENTRY (model shows more curvature at t_base than planner now),
     # keep full lookahead so pre-steering begins early. On exit/apex, taper by magnitude to prevent unwind.
     _kappa_at_entering = 0.0
@@ -454,12 +468,19 @@ class LateralAngleExt:
       _kappa_at_entering = abs(float(interp(_t_entering, ModelConstants.T_IDXS, _curvatures_ref)))
     # Anti-weave: hysteresis so noise straddling the entering/exiting boundary can't flip
     # this boolean (and with it the exit-blend gate) frame to frame near zero curvature.
-    _kappa_entering = self.smoother.entering(_kappa_at_entering - abs(desired_curvature),
-                                             _kappa_at_entering > abs(desired_curvature))
+    _enter_delta = _kappa_at_entering - abs(desired_curvature) * 1.05
+    _kappa_entering = self.smoother.entering(_enter_delta, _enter_delta > 0)
     if _kappa_entering:
-      _kappa_factor = 1.0  # curve deepening ahead: full extra lookahead for gradual entry
+      target_kappa_factor = 1.0  # curve deepening ahead: full extra lookahead for gradual entry
     else:
-      _kappa_factor = float(interp(abs(desired_curvature), [_VLT_KAPPA_FULL, _VLT_KAPPA_TAPER], [1.0, 0.0]))
+      target_kappa_factor = float(interp(abs(desired_curvature), [_VLT_KAPPA_FULL, _VLT_KAPPA_TAPER], [1.0, 0.0]))
+    #Low Pass Filter for _kappa_factor calculation
+    if self.kappa_factor is None:
+      self.kappa_factor = target_kappa_factor
+    else:
+      self.kappa_factor = 0.80 * self.kappa_factor + 0.20 * target_kappa_factor
+    _kappa_factor = float(clip(self.kappa_factor, 0.0, 1.0))
+
     curvature_lookup_time = _t_base + self.vlt_extra_max * _speed_factor * _kappa_factor
     self.bp_curvature_lookup_time = curvature_lookup_time
 
@@ -473,8 +494,8 @@ class LateralAngleExt:
     # in angle_smoothing.prediction — inside the VLT's slack, so no curve-entry cost).
     predicted_curvature = self.smoother.prediction(predicted_curvature)
 
-    b = float(self.path_angle_blend_ratio)
-    b = float(clip(b, 0.0, 1.0))
+    b = float(clip(self.path_angle_blend_ratio, 0.0, 1.0))
+    b = interp(v_ego, [_VLT_V_LOW_MS, _VLT_V_HIGH_MS], [b, 0.0])
 
     # Exit-biased blend: near the PSCM authority limit or while the planner is actively
     # reducing curvature (exit detected), drop model prediction weight from 60% → ~15%.
@@ -498,11 +519,21 @@ class LateralAngleExt:
     # that same real-world trigger rate on this branch's actual 20Hz cadence; unscaled it fired at
     # 0.04 (1/m)/s, collapsing the model blend on mild straightening instead of genuine exits.
     # Same bug class and fix as _PSCM_SAT_UNWIND_RATE and _soft_roc above.
-    _desired_falling = abs(desired_curvature) < abs(self._desired_curvature_last) - 0.010
+    _desired_falling = (
+      abs(desired_curvature) < abs(self._desired_curvature_last) * 0.95
+    )
     _on_exit_near_limit = not _kappa_entering and (_pscm_lim >= 1 or _in_hard_sat or _desired_falling)
-    _b_target = float(clip(b * 0.25, 0.0, 1.0)) if _on_exit_near_limit else b
-    # Anti-weave: slew instead of stepping the exit blend (bounded ramps, no 4x steps).
-    b_blend = self.smoother.blend(_b_target)
+
+    # Low pass filter for b_blend. Prevents instant jumps between .5 and .125 predicted_curvature weight
+    target_b_blend = b * 0.25 if _on_exit_near_limit else b
+    if self.b_blend is None:
+      self.b_blend = target_b_blend
+    else:
+      self.b_blend = 0.80 * self.b_blend + 0.20 * target_b_blend
+    b_blend = float(clip(self.b_blend, 0.0, 1.0))
+    # BluePilot: retain optional anti-weave slew after PR #191's baseline low-pass.
+    b_blend = self.smoother.blend(b_blend)
+    # End BluePilot
     requested_curvature = predicted_curvature * b_blend + desired_curvature * (1.0 - b_blend)
     self._desired_curvature_last = desired_curvature
 
@@ -570,14 +601,15 @@ class LateralAngleExt:
                                 [1.0, self.path_angle_gain_lowC_highV * self.user_dampening_factor])
     self.high_gain_calc = interp(v_ego, [V_LOW, V_HIGH],
                                  [(LOW_ANCHOR_BASE * self.low_speed_curv_factor),
-                                  (self.path_angle_gain_highC_highV * self.high_speed_curv_factor)])
+                                  (HIGH_ANCHOR_SCALE * self.path_angle_gain_highC_highV * self.high_speed_curv_factor)])
 
     # As the curve grows the signal needs a boost to not understeer. The smoother's
     # asymmetric filter on |kappa| is the PRIMARY anti-weave fix (see angle_smoothing.py).
-    # COUPLING: the interp knee top (0.001) is auto-cal's MIN_KAPPA — the calibrator only
-    # samples fully inside the high branch. If this band moves, MIN_KAPPA moves with it.
     _kappa_for_gain = self.smoother.kappa_schedule(abs(kappa_cmd))
-    self.curvature_factor = interp(_kappa_for_gain, [0.0007, 0.001], [self.low_gain_calc, self.high_gain_calc])
+    # BluePilot: share PR #191's speed-dependent gain knee with calibration evidence.
+    self._gain_blend = curve_gain_blend(v_ego, _kappa_for_gain)
+    self.curvature_factor = interp(self._gain_blend, [0.0, 1.0], [self.low_gain_calc, self.high_gain_calc])
+    # End BluePilot
 
     path_angle_calc = kappa_cmd * v_ego * self.curvature_factor
     path_angle = path_angle_calc

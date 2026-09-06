@@ -6,6 +6,7 @@ See the LICENSE.md file in the root directory for more details.
 """
 
 from collections import namedtuple
+from numpy import interp
 
 from opendbc.car import structs
 from opendbc.car.docs_definitions import CarParts, Device
@@ -155,9 +156,17 @@ def platform_gains(fingerprint: str) -> tuple[float, float]:
   return GAIN_CAN
 
 
-# Speed anchors of the strategy's gain interpolation (m/s: ~30 mph and ~60 mph), and the
+# Speed anchors of the strategy's gain interpolation (m/s: ~25 mph and ~70 mph), and the
 # fixed multiplier on the low-speed anchor. The auto-calibrator's fit is expressed
 # against these — if the strategy's interp changes, they must move together.
-V_LOW = 13.5
-V_HIGH = 26.82
-LOW_ANCHOR_BASE = 1.30
+# BluePilot: PR #191's gain model is shared by the strategy and auto-calibrator.
+V_LOW = 11.18
+V_HIGH = 31.29
+LOW_ANCHOR_BASE = 1.40
+HIGH_ANCHOR_SCALE = 1.20
+
+
+def curve_gain_blend(v_ego: float, kappa_abs: float) -> float:
+  boundary = interp(v_ego, [8.94, 13.41, 16.54, 31.29], [0.02, 0.0195, 0.018, 0.0035])
+  return float(interp(kappa_abs, [0.0005, boundary], [0.0, 1.0]))
+# End BluePilot

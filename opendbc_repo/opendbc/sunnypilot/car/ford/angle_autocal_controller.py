@@ -15,18 +15,17 @@ import json
 from opendbc.sunnypilot.car.ford.angle_autocal import AutoCalPipeline, Frame
 
 SAVE_PERIOD_S = 30.0
+STATE_VERSION = 2  # BluePilot: PR #191 gain model; v1 evidence/locks are incompatible.
 EDIT_TOL = 0.005    # half the menu granularity (0.01): a factor moved further than this
 # without the nudger writing it is a driver hand-edit
 
 
 def _state_locked(state: str) -> bool:
-  """True when the persisted state says the calibration is finished.
-  Legacy pre-JSON states ("done low=... high=... verified") stay honored."""
-  if state.startswith("done"):
-    return True
+  """Only locks earned under the current gain model remain valid."""
   if state.startswith("{"):
     try:
-      return json.loads(state).get("phase") == "locked"
+      d = json.loads(state)
+      return d.get("v") == STATE_VERSION and d.get("phase") == "locked"
     except (ValueError, AttributeError):
       return False
   return False
@@ -40,7 +39,7 @@ def _restore(pipeline, state: str):
   try:
     d = json.loads(state)
     pipe = d.get("pipe")
-    if isinstance(pipe, dict) and int(d.get("v", 0)) == 1:
+    if isinstance(pipe, dict) and d.get("v") == STATE_VERSION:
       pipeline.from_dict(pipe)
   except (ValueError, KeyError, TypeError):
     pass
@@ -208,7 +207,7 @@ class AutoCalController:
     if self._params is None or self.pipeline is None:
       return
     d = {
-      "v": 1,
+      "v": STATE_VERSION,
       "phase": phase,
       "pipe": self.pipeline.to_dict(),
       "applied": {"low": round(applied[0], 2), "high": round(applied[1], 2)},

@@ -24,7 +24,7 @@ from opendbc.car import structs
 from opendbc.car.ford.values import CAR, CarControllerParams
 from opendbc.car.interfaces import scale_tire_stiffness
 from opendbc.sunnypilot.car.ford import lateral_curv_ext
-from opendbc.sunnypilot.car.ford.values_ext import FordSafetyFlagsSP
+from opendbc.sunnypilot.car.ford.values_ext import FordSafetyFlagsSP, V_HIGH, curve_gain_blend
 from opendbc.sunnypilot.car.ford.lateral_curv_ext import LateralCurvExt
 from opendbc.sunnypilot.car.ford.lateral_angle_ext import LateralAngleExt
 
@@ -258,7 +258,7 @@ class TestAngleParams(unittest.TestCase):
 
   def test_high_speed_dampening_multiplies_low_curvature_high_speed_gain(self):
     self.ext.update_angle_params(_FakeParams({"FordHighSpeedDampening_ang": b"1.12"}))
-    cs = _CS(vEgoRaw=26.82, vEgo=26.82)
+    cs = _CS(vEgoRaw=V_HIGH, vEgo=V_HIGH)
     self.ext.update_angle_strategy(_CC(), cs, _Actuators(), self.ext.CP)
     self.assertAlmostEqual(
       self.ext.low_gain_calc,
@@ -489,8 +489,8 @@ class TestAngleSmoothing(unittest.TestCase):
     ext = self._ext(False)
     for d in [0.0006, 0.0011, 0.0006, 0.0011] * 10:
       ext.update_angle_strategy(_CC(), self._cs(d), _Actuators(curvature=d), _explorer_cp())
-      expected = float(np_interp(abs(ext.bp_kappa_cmd), [0.0007, 0.001],
-                                 [ext.low_gain_calc, ext.high_gain_calc]))
+      expected = float(np_interp(curve_gain_blend(self._cs(d).out.vEgoRaw, abs(ext.bp_kappa_cmd)), [0.0, 1.0],
+                                   [ext.low_gain_calc, ext.high_gain_calc]))
       self.assertAlmostEqual(ext.curvature_factor, expected, places=12)
     # OFF path must leave the smoothing filters untouched at their reset values.
     self.assertEqual(ext.smoother._sched, 0.0)
