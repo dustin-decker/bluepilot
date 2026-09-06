@@ -16,7 +16,7 @@ from opendbc.sunnypilot.car.ford.angle_autocal import AutoCalPipeline, Frame
 
 SAVE_PERIOD_S = 30.0
 EDIT_TOL = 0.005    # half the menu granularity (0.01): a factor moved further than this
-                    # without the nudger writing it is a driver hand-edit
+# without the nudger writing it is a driver hand-edit
 
 
 def _state_locked(state: str) -> bool:

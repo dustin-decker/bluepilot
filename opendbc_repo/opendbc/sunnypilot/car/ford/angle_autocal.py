@@ -616,7 +616,7 @@ class SteadyStateGate:
     self.grip_cooldown_s = 0.0
     self.grip_this_frame = False    # grip seen on the frame last passed to update()
     self.frame_clear = False        # per-frame admission (no grip/cooldown/limiter flags),
-                                    # computed ONCE here and shared with the apex path
+    # computed ONCE here and shared with the apex path
 
   def reset(self):
     """Inactive frame (disengaged / human turn / stall blip): steadiness restarts and the
@@ -715,7 +715,7 @@ class AutoCalPipeline:
     self.nudges = 0
     self.locked = False
     self.lock_enabled = True   # FordAngleAutoCalLock (set by the controller, not persisted):
-                               # False = never freeze, keep adapting for the life of the toggle
+    # False = never freeze, keep adapting for the life of the toggle
     # Adjust-then-verify state (persisted): each step opens a window that must be judged
     # against fresh evidence before its anchor may step again. half 0 = low, 1 = high.
     self.verify = {0: None, 1: None}     # {"frm": factor, "to": factor, "pre_r": ratio|None}
