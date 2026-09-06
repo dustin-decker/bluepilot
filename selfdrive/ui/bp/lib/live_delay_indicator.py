@@ -1,7 +1,8 @@
 """Onroad steering-lag calibration indicator (shared by TICI and MICI HUDs).
 
 Shows the icon while liveDelay is not yet estimated; green once vEgo is above
-MIN_VEGO, meaning samples are actually being collected. Hidden once estimated.
+MIN_VEGO, meaning the speed gate is met (other collection gates may still reject).
+Hidden once estimated.
 """
 import pyray as rl
 
