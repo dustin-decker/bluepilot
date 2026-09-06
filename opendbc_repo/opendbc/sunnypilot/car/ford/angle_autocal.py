@@ -410,7 +410,8 @@ class AngleFactorEstimator:
               + anchor_low * anchor_low * self.s_ll
               + 2.0 * anchor_low * anchor_high * self.s_lh
               + anchor_high * anchor_high * self.s_hh)
-    dof = max(1.0, self.s_w - 2.0)
+    # q^2 is inverse relative noise variance, not a count of independent observations.
+    dof = max(1.0, sum(self.duration) - 2.0)
     var = sse / dof
     stderr_low = math.sqrt(max(0.0, var * self.s_hh / det))
     stderr_high = math.sqrt(max(0.0, var * self.s_ll / det))

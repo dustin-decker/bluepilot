@@ -68,7 +68,7 @@ def auto_cal_bars_rect(content_rect: rl.Rectangle, developer_ui=DeveloperUiState
   """Center below the wheel, moving left when the right diagnostic panel is visible."""
   button_left = content_rect.x + content_rect.width - UI_BORDER_SIZE - BTN_SIZE
   if developer_ui in (DeveloperUiState.RIGHT, DeveloperUiState.BOTH):
-    button_left -= 224  # SP diagnostic panel: 184 px plus two 20 px borders.
+    button_left -= 224 + UI_BORDER_SIZE  # SP panel + its borders, with room for the gauge label.
   return rl.Rectangle(
     button_left + (BTN_SIZE - AUTO_CAL_BARS_WIDTH) / 2,
     content_rect.y + UI_BORDER_SIZE + BTN_SIZE + AUTO_CAL_BUTTON_GAP + AUTO_CAL_LABEL_FONT_SIZE + AUTO_CAL_LABEL_GAP,

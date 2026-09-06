@@ -119,6 +119,30 @@ def test_partial_authority_duration_survives_decay_and_serialization():
   assert restored.to_dict() == est.to_dict()
 
 
+def test_partial_gain_stderr_matches_independent_weighted_least_squares():
+  est = AngleFactorEstimator(1.05)
+  design, targets, weights = [], [], []
+  rng = random.Random(192)
+  for i in range(2400):
+    v = [10, 20, 32][i % 3]
+    a = float(np.interp(v, [11.18, 31.29], [0, 1]))
+    q = [0.3, 0.5, 0.7][i % 3]
+    y = (1 - a) * 1.4 + a * 1.26 + rng.uniform(-0.03, 0.03) / q
+    gain = GainSample(1 - q + q * ((1 - a) * 1.4 + a * 1.26), 1 - q, q, v)
+    k = 0.0015 if i % 2 else -0.0015
+    assert est.add_sample(v, k, k * gain.total / (gain.fixed + q * y), gain, weight=0.05)
+    design.append([1 - a, a])
+    targets.append(y)
+    weights.append(0.05 * q * q)
+  x, y, w = np.array(design), np.array(targets), np.array(weights)
+  inverse = np.linalg.inv(x.T @ (w[:, None] * x))
+  fit = inverse @ (x.T @ (w * y))
+  variance = np.sum(w * (y - x @ fit) ** 2) / (len(y) * 0.05 - 2)
+  expected = np.sqrt(np.diag(inverse) * variance)
+  stats = est.solve()[2]
+  assert [stats['stderr_low'], stats['stderr_high']] == pytest.approx(expected, rel=1e-6)
+
+
 @pytest.mark.parametrize('phase', ['collecting', 'locked'])
 def test_old_evidence_and_locks_restart_without_resetting_factors(phase):
   donor = AutoCalPipeline(1.05)

@@ -1,7 +1,7 @@
 """Auto-calibration band gauges for the on-device lateral debug graph.
 
-Two phone-battery-style vertical gauges — BLUE = low band (curves under 30 mph),
-RED = high band (over 60 mph) — in the strip left of the plot. Each fills bottom-up as
+Two phone-battery-style vertical gauges — BLUE = low anchor, RED = high anchor —
+in the strip left of the plot. Each fills bottom-up as
 that band charges toward calibrated: partway while collecting evidence, up while a step
 is being checked, and full once the band is calibrated. A full band stays full; when the
 whole calibration locks the gauges become padlocks. Hidden while auto-calibration is off.
@@ -15,6 +15,8 @@ import pyray as rl
 
 from openpilot.system.ui.widgets import Widget
 from openpilot.system.ui.lib.application import gui_app, FontWeight
+from opendbc.car.common.conversions import Conversions as CV
+from opendbc.sunnypilot.car.ford.values_ext import V_LOW, V_HIGH
 
 try:
   import cereal.messaging as _messaging
@@ -168,7 +170,7 @@ class AutoCalBars(Widget):
     label_gap = round(_LABEL_GAP * self._scale)
     label_font = round(_LABEL_FONT * self._scale)
     row_pitch = round(_ROW_PITCH * self._scale)
-    for band, rgb, label in (("low", _BLUE, "<30"), ("high", _RED, ">60")):
+    for band, rgb, label in (("low", _BLUE, f"<{V_LOW * CV.MS_TO_MPH:.0f}"), ("high", _RED, f">{V_HIGH * CV.MS_TO_MPH:.0f}")):
       if self.locked:
         self._draw_lock(x, int(y), rgb)
       else:
