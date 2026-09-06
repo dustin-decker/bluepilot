@@ -32,6 +32,7 @@ Saved v1 evidence and locks are rejected. Existing factor settings are **not aut
 - Real-device SCons full build succeeds. Native C++ replay is excluded by this tree's TICI build configuration; no build-system workaround was added.
 - Read-only route smoke replay: `0000001b--ca636b7372` segments 0–2 (3,419 frames, 1,695 laterally active); `0000001e--8c1cee9fce` segments 5–7 (2,508 active frames, smoothing strength 2.5). No autocal runtime errors. These are September 4 UTC routes, including the prior local evening. Both runs admitted zero calibration samples; the first route reports stock/openpilot control mode, not the new angle controller. This verifies runtime/rejection paths, **not real-route factor recovery**.
 - Isolated Python UI-only replay of recorded onroad messages ran on the device. No manager/card/pandad or CAN publishers ran during replay. Camera video was not replayed. Low-FPS warnings occurred, so this is **not a performance pass**.
+- Additional `0000001b--ca636b7372` segments 10–12: 2,518 active/armed frames, no runtime errors and no admitted samples; all recorded in stock/openpilot mode. Total distinct route smoke coverage: 8,445 frames.
 - Actual gauge and live-delay widgets rendered into a device GPU texture and were visually inspected. Developer-panel clearance is regression-tested with sidebar open/closed. Full camera/theme/MICI visual coverage is not claimed.
 
 Run the route smoke harness with local files only:
