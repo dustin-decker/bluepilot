@@ -196,7 +196,6 @@ class LateralAngleExt:
     # limits or the DBC clamp — the car could not make the requested turn.
     self.bp_angle_saturated = False
 
-
   # -- smoothing compat surface (offline replay tooling sets these directly) ---------------
   @property
   def smoothing_enabled(self) -> bool:
@@ -338,7 +337,6 @@ class LateralAngleExt:
     self._ensure_lateral_curv_initialized(CP)
 
     v_ego = float(CS.out.vEgoRaw)
-    d_ref = pscm_d_ref_m(v_ego)
 
     curvature_rate = 0.0
     path_offset = 0.0
@@ -417,7 +415,6 @@ class LateralAngleExt:
 
     self.precision_type = 1
     precision = 1
-    LP = self.lp
     desired_curvature = float(actuators.curvature)
 
     # Variable lookup time — delay compensation is SPLIT across two horizons (2026-07-23):
@@ -551,8 +548,6 @@ class LateralAngleExt:
 
     lateral_uncertainty = 0.0  # no curvature-limit ladder until angle-mode torque display is defined
 
-
-
     # Speed-interpolated gain: at low speed both curves use 1.0; at high speed the params take effect.
     self.low_gain_calc = interp(v_ego, [V_LOW, V_HIGH],
                                 [1.0, self.path_angle_gain_lowC_highV * self.user_dampening_factor])
@@ -569,7 +564,6 @@ class LateralAngleExt:
 
     path_angle_calc = kappa_cmd * v_ego * self.curvature_factor
     path_angle = path_angle_calc
-
 
     # PSCM authority limit clamp.
     # On CANFD Fords in angle mode, LatCtlLim_D_Stat does not fire, so _pscm_lim stays 0.
@@ -616,7 +610,6 @@ class LateralAngleExt:
     # Anti-weave: 1-LSB wire hold on the outgoing path_angle (kills LSB dither; held
     # frames are zero-ROC and cannot trip panda — details in angle_smoothing.wire).
     path_angle = self.smoother.wire(path_angle)
-
 
     # c0 always zero -- no centering trim in angle mode.
     path_offset = 0.0

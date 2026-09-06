@@ -1,4 +1,3 @@
-import pyray as rl
 
 from openpilot.common.params import Params
 from openpilot.common.params_pyx import UnknownKeyName
@@ -129,7 +128,9 @@ class BluePilotLayout(Widget):
     # flip only takes effect after the next restart (safe to toggle any time).
     self._steer_angle_curvature = toggle_item(
       lambda: tr("Use Pinion Yaw Sensor"),
-      lambda: tr('Measures how the car is turning from the steering pinion angle sensor instead of a faulty RCM yaw sensor (symptoms: "Turn Exceeds Steering Limit" warnings, weak curve tracking, "Service AdvanceTrac"). Check with tools/ford_yaw_health_check.py. Applies the next time the car starts. Not available on the Edge.'),
+      lambda: tr('Measures how the car is turning from the steering pinion angle sensor instead of a faulty RCM yaw sensor '
+                 + '(symptoms: "Turn Exceeds Steering Limit" warnings, weak curve tracking, "Service AdvanceTrac"). '
+                 + 'Check with tools/ford_yaw_health_check.py. Applies the next time the car starts. Not available on the Edge.'),
       initial_state=self._safe_get_bool(self._params, "FordPrefSteerAngleCurvature"),
       callback=lambda state: self._toggle_callback(state, "FordPrefSteerAngleCurvature"),
       icon="monitoring.png",
@@ -516,7 +517,8 @@ class BluePilotLayout(Widget):
     self._connect_backend_action.set_value(lambda: self._get_connect_backend_display())
     self._connect_backend_btn = ListItem(
       lambda: tr("Connect Backend"),
-      description=lambda: tr("Comma Connect uses stock servers. Konik Stable sends routes to stable.konik.ai (dongle ID switches automatically). Offline Mode points at unreachable hosts so uploads never succeed. Reboot to apply."),
+      description=lambda: tr("Comma Connect uses stock servers. Konik Stable sends routes to stable.konik.ai (dongle ID switches automatically). "
+                             + "Offline Mode points at unreachable hosts so uploads never succeed. Reboot to apply."),
       action_item=self._connect_backend_action,
       callback=self._select_connect_backend
     )
@@ -527,7 +529,8 @@ class BluePilotLayout(Widget):
     self._restore_dongle_action.set_value(lambda: self._get_recoverable_dongle_id_preview())
     self._restore_dongle_btn = ListItem(
       lambda: tr("Restore Cached Dongle ID"),
-      description=lambda: tr("If switching backends left this device unregistered, restore a previously registered ID found cached here. Only enabled when one is found."),
+      description=lambda: tr("If switching backends left this device unregistered, restore a previously registered ID found cached here. "
+                             + "Only enabled when one is found."),
       action_item=self._restore_dongle_action,
       callback=self._restore_dongle_id
     )
@@ -567,9 +570,9 @@ class BluePilotLayout(Widget):
     self._angle_autocal = toggle_item(
       lambda: tr("Auto-Calibrate Adjustment Factors"),
       lambda: tr("Learns the low/high speed factors automatically by comparing requested and actual "
-                 "turn in steady engaged curves, then locks them (one-time, per car). Drive normally "
-                 "with lateral engaged; curves at city and highway speeds both needed. Toggle off and "
-                 "back on to recalibrate."),
+                 + "turn in steady engaged curves, then locks them (one-time, per car). Drive normally "
+                 + "with lateral engaged; curves at city and highway speeds both needed. Toggle off and "
+                 + "back on to recalibrate."),
       initial_state=self._safe_get_bool(self._params, "FordAngleAutoCal"),
       callback=self._toggle_angle_autocal,
       icon="chffr_wheel.png"
@@ -579,9 +582,9 @@ class BluePilotLayout(Widget):
     self._angle_autocal_lock = toggle_item(
       lambda: tr("Calibration Lock"),
       lambda: tr("On (default): auto-calibration freezes once the factors have been stable for "
-                 "5 minutes of driving. Off: it never locks and keeps adapting continuously — "
-                 "turning this off on an already-locked car resumes calibration from its saved "
-                 "evidence without losing anything."),
+                 + "5 minutes of driving. Off: it never locks and keeps adapting continuously — "
+                 + "turning this off on an already-locked car resumes calibration from its saved "
+                 + "evidence without losing anything."),
       initial_state=self._safe_get_bool(self._params, "FordAngleAutoCalLock", default=True),
       callback=lambda state: self._toggle_callback(state, "FordAngleAutoCalLock"),
       icon="chffr_wheel.png"
@@ -591,7 +594,7 @@ class BluePilotLayout(Widget):
       lambda: tr("Erase Calibration Memory"),
       lambda: tr("ERASE"),
       lambda: tr("Wipes all collected calibration evidence, clears any lock, and puts both "
-                 "adjustment factors back to 1.00 for a clean retry. Works offroad or mid-drive."),
+                 + "adjustment factors back to 1.00 for a clean retry. Works offroad or mid-drive."),
       callback=self._erase_angle_autocal
     )
     # BluePilot: anti-weave smoothing of the angle command path (gain-schedule filter,
@@ -599,8 +602,8 @@ class BluePilotLayout(Widget):
     self._angle_smoothing = toggle_item(
       lambda: tr("Smooth Steering (Anti-Weave)"),
       lambda: tr("Removes the rhythmic left-right centering motion in angle mode by filtering "
-                 "the sources of steering dither on straight roads. No effect in curves. "
-                 "Turn off to compare against the unsmoothed behavior."),
+                 + "the sources of steering dither on straight roads. No effect in curves. "
+                 + "Turn off to compare against the unsmoothed behavior."),
       initial_state=self._safe_get_bool(self._params, "FordAngleSmoothing", default=True),
       callback=lambda state: self._toggle_callback(state, "FordAngleSmoothing"),
       icon="chffr_wheel.png"
@@ -609,8 +612,8 @@ class BluePilotLayout(Widget):
     self._angle_smoothing_strength = float_control_item(
       lambda: tr("Smoothing Strength"),
       lambda: tr("1.0 = stock steering (no smoothing). Step up for more damping of the "
-                 "straight-road weave; 2.0 = the log-tuned setting, 2.5 = strongest. "
-                 "Curve response is unaffected at any strength."),
+                 + "straight-road weave; 2.0 = the log-tuned setting, 2.5 = strongest. "
+                 + "Curve response is unaffected at any strength."),
       param="FordAngleSmoothStrength",
       min_value=1.0,
       max_value=2.5,
@@ -989,8 +992,10 @@ class BluePilotLayout(Widget):
     plat_idx = PrimaryLateralControl(ui_state.params.get("FordPrefLateralControl", return_default=True) or 0)
     self._primary_lateral_control_btn.action_item.set_selected_button(plat_idx)
     custom_prof = fresh.get("custom_profile_curv") if "custom_profile_curv" in fresh else self._safe_get_bool(ui_state.params, "custom_profile_curv")
-    lane_pos = fresh.get("enable_lane_positioning_curv") if "enable_lane_positioning_curv" in fresh else self._safe_get_bool(ui_state.params, "enable_lane_positioning_curv")
-    lane_pos_ang = fresh.get("enable_lane_positioning_ang") if "enable_lane_positioning_ang" in fresh else self._safe_get_bool(ui_state.params, "enable_lane_positioning_ang")
+    lane_pos = (fresh.get("enable_lane_positioning_curv") if "enable_lane_positioning_curv" in fresh
+                else self._safe_get_bool(ui_state.params, "enable_lane_positioning_curv"))
+    lane_pos_ang = (fresh.get("enable_lane_positioning_ang") if "enable_lane_positioning_ang" in fresh
+                   else self._safe_get_bool(ui_state.params, "enable_lane_positioning_ang"))
     pause_lc = fresh.get("BlinkerPauseLaneChange") if "BlinkerPauseLaneChange" in fresh else self._safe_get_bool(ui_state.params, "BlinkerPauseLaneChange")
     is_angle = (plat_idx == PrimaryLateralControl.angle)
     is_curv = not is_angle

@@ -8,14 +8,13 @@ import pytest
 from opendbc.sunnypilot.car.ford.angle_autocal import (
   Frame,
   AngleFactorEstimator, AutoCalPipeline, PeakMatcher, QualityMonitor, SteadyStateGate,
-  speed_alpha, V_LOW, V_HIGH, LOW_ANCHOR_BASE, STEADY_TIME_S, MIN_KAPPA, REL_KAPPA_RATE,
-  PRESS_HOLDBACK_S, PRESS_COOLDOWN_S, MAX_LAT_ACCEL, MAX_LONG_ACCEL,
-  PEAK_MIN_KAPPA, PEAK_PROMINENCE, PEAK_MEDIAN_N, PEAK_WEIGHT_S,
-  SPIKE_MEAS_RATE, DISTURBANCE_BLANK_S, ROUGH_RMS_MAX, WS_SPREAD_JUMP,
+  speed_alpha, LOW_ANCHOR_BASE, STEADY_TIME_S, MIN_KAPPA, REL_KAPPA_RATE,
+  PRESS_HOLDBACK_S, PRESS_COOLDOWN_S, MAX_LONG_ACCEL,
+  PEAK_MIN_KAPPA, PEAK_PROMINENCE, SPIKE_MEAS_RATE, DISTURBANCE_BLANK_S, ROUGH_RMS_MAX, WS_SPREAD_JUMP,
   TAU_EVIDENCE_S, LR_MIN_WEIGHT, LR_TOL,
   NUDGE_PERIOD_S, NUDGE_MIN_WEIGHT, NUDGE_MAX_STEP, FACTOR_STEP, nudge_units,
   VERIFY_MIN_WEIGHT, VERIFY_FAIL_HOLD_WEIGHT,
-  LOCK_MIN_WEIGHT, LOCK_DEADBAND, LOCK_STABLE_S,
+  LOCK_DEADBAND, LOCK_STABLE_S,
 )
 
 PLATFORM_GAIN_HIGH = 1.05  # Mach-E
@@ -734,7 +733,7 @@ class TestClosedLoopConvergence:
     assert pipe.locked, (applied, pipe.stable_s, pipe.est.weight_low, pipe.est.weight_high)
     # No oscillation: once inside the deadband the nudger must not bounce in and out.
     lows = [r[0] for r in all_nudges]
-    assert all(l2 >= l1 - NUDGE_MAX_STEP - 1e-9 for l1, l2 in zip(lows, lows[1:])), lows
+    assert all(l2 >= l1 - NUDGE_MAX_STEP - 1e-9 for l1, l2 in zip(lows, lows[1:], strict=False)), lows
 
 
 def _frame(v, kc, km, pressed=False, rate=False, dev=False, saturated=False,
@@ -813,6 +812,7 @@ class TestOnboardGlue:
         pass
 
     ext = _Harness()
+
     class _CP:
       carFingerprint = "FORD_MUSTANG_MACH_E_MK1"
     ext.CP = _CP()

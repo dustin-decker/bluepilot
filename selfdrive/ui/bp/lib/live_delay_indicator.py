@@ -48,7 +48,7 @@ class LiveDelayIndicator:
 
     backdrop = rl.Rectangle(x - PAD, y - PAD, self.width + PAD * 2, self.height + PAD * 2)
     rl.draw_rectangle_rounded(backdrop, 0.15, 10, BACKDROP)
-    rl.draw_texture(self._icon, int(x), int(y), ACTIVE if sm['carState'].vEgo >= MIN_VEGO else IDLE)
+    rl.draw_texture_ex(self._icon, rl.Vector2(x, y), 0.0, 1.0, ACTIVE if sm['carState'].vEgo >= MIN_VEGO else IDLE)
 
 
 def demo():

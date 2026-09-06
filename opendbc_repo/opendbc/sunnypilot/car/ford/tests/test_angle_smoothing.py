@@ -10,8 +10,8 @@ import math
 import random
 
 from opendbc.sunnypilot.car.ford.angle_smoothing import (
-  AngleSmoother, GAIN_RC_UP, GAIN_RC_DOWN, PRED_RC, ENTER_HYST, BLEND_SLEW,
-  WIRE_HOLD, MENU_MIN, MENU_MAX,
+  AngleSmoother, ENTER_HYST, BLEND_SLEW,
+  WIRE_HOLD, MENU_MAX,
 )
 
 DT = 0.05

@@ -24,7 +24,7 @@ from openpilot.selfdrive.ui.sunnypilot.onroad.developer_ui import DeveloperUiSta
 from openpilot.selfdrive.ui.ui_state import ui_state
 from openpilot.selfdrive.ui.bp.lib.ui_debug_logger import bp_ui_log
 # BluePilot: unified theme selector (BPThemePack param)
-from openpilot.selfdrive.ui.bp.lib import theme_pack, theme_scene
+from openpilot.selfdrive.ui.bp.lib import theme_scene
 from openpilot.system.ui.lib.application import FontWeight, gui_app
 from openpilot.system.ui.lib.text_measure import measure_text_cached
 from bluepilot.ui.widgets.debug.autocal_bars import AutoCalBars, poll_status
