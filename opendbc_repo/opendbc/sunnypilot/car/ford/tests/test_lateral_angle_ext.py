@@ -272,6 +272,66 @@ class TestAngleParams(unittest.TestCase):
         self.assertAlmostEqual(self.ext.user_dampening_factor, expected)
 
 
+class TestTakeoverAndDeviationBudget(unittest.TestCase):
+  """BluePilot: PR #194 remains effective alongside autocal and smoothing."""
+
+  def setUp(self):
+    self.CP = _explorer_cp()
+    self.ext = _Harness(self.CP)
+    self.ext.human_turn_detector = _ForcedDetector(False)
+    self.cs = _CS()
+
+  def update(self, curvature=0.0, active=True):
+    return self.ext.update_angle_strategy(_CC(active), self.cs, _Actuators(curvature), self.CP)
+
+  def test_release_chatter_does_not_trigger_handoff(self):
+    self.cs.out.steeringPressed = True
+    for _ in range(20):
+      self.update()
+    self.cs.out.steeringPressed = False
+    self.update()
+    self.assertFalse(self.ext.angle_stall_blip_active)
+    self.cs.out.steeringPressed = True
+    self.update()
+    self.cs.out.steeringPressed = False
+    for _ in range(6):
+      self.update()
+    self.assertTrue(self.ext.angle_stall_blip_active)
+
+  def test_inactive_and_human_turn_clear_release_state(self):
+    for human_turn in (False, True):
+      with self.subTest(human_turn=human_turn):
+        self.ext.press_timer_s = 1.0
+        self.ext.release_timer_s = 0.2
+        self.ext.human_turn_detector = _ForcedDetector(human_turn)
+        self.update(active=human_turn)
+        self.assertEqual(self.ext.press_timer_s, 0.0)
+        self.assertEqual(self.ext.release_timer_s, 0.0)
+
+  def test_curve_entry_from_straight_does_not_trigger_stall(self):
+    for _ in range(80):
+      self.update(curvature=0.02)
+      self.assertFalse(self.ext.angle_stall_blip_active)
+    self.assertEqual(self.ext.stall_blip_count, 0)
+
+  def test_trim_cannot_consume_planner_budget_in_either_direction(self):
+    self.ext.path_angle_blend_ratio = 0.0
+    for sign in (-1, 1):
+      with self.subTest(sign=sign):
+        planner = sign * 0.01
+        with mock.patch.object(self.ext.lane_center_trim, 'update', return_value=-planner):
+          self.update(curvature=planner)
+        self.assertAlmostEqual(self.ext.bp_kappa_cmd, sign * self.ext.bp_curvature_error)
+
+  def test_pinion_band_is_used_by_angle_strategy(self):
+    for pinion, band in ((False, CarControllerParams.CURVATURE_ERROR), (True, 0.003)):
+      ext, cp = _pinion_harness(pinion)
+      ext.path_angle_blend_ratio = 0.0
+      with mock.patch.object(ext, 'get_current_curvature', return_value=0.0):
+        ext.update_angle_strategy(_CC(), self.cs, _Actuators(0.02), cp)
+      self.assertAlmostEqual(ext.bp_kappa_cmd, band)
+
+
 class TestInitializeFord(unittest.TestCase):
   def test_safety_param_stays_a_plain_int(self):
     """card serializes CP_SP to capnp, which rejects enum subclasses of int -- an
