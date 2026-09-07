@@ -69,6 +69,12 @@ def test_unknown_head_width_is_rejected(name, width):
     Parser(ignore_missing=True).parse_outputs({name: np.zeros((1, width), dtype=np.float32)})
 
 
+@pytest.mark.parametrize('name,width', [('plan', 1980), ('plan', 4950), ('planplus', 1980), ('lead', 48), ('lead', 96)])
+def test_inferable_but_unsupported_consumer_shape_is_rejected(name, width):
+  with pytest.raises(ValueError, match=f'Unsupported parsed {name} shape'):
+    Parser().parse_outputs({name: np.zeros((1, width), dtype=np.float32)})
+
+
 @pytest.mark.parametrize('batch', [1, 2])
 def test_unweighted_leads_keep_per_hypothesis_means_and_stds(batch):
   means = np.arange(batch * 72, dtype=np.float32).reshape(batch, 3, 24)
