@@ -44,6 +44,17 @@ class Parser:
     if self.check_missing(outs, name):
       return
     raw = outs[name]
+    # BluePilot: combined catalog models (e.g. RDF) can use single-distribution
+    # plan/lead heads. Detect their exact width; retain legacy MHP selection.
+    if in_N > 1:
+      single_shape = ((out_N,) if out_N > 1 else ()) + tuple(out_shape)
+      single_width = 2 * int(np.prod(single_shape))
+      mhp_width = in_N * (2 * int(np.prod(out_shape)) + out_N)
+      if raw.ndim != 2 or raw.shape[1] not in (single_width, mhp_width):
+        raise ValueError(f"Invalid {name} output shape {raw.shape}; expected batch x {single_width} or {mhp_width}")
+      if raw.shape[1] == single_width:
+        in_N, out_N, out_shape = 0, 0, single_shape
+    # End BluePilot
     raw = raw.reshape((raw.shape[0], max(in_N, 1), -1))
 
     n_values = (raw.shape[2] - out_N)//2
