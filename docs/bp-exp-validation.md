@@ -118,3 +118,30 @@ Claude Fable 5.1 reviewed the integration and specifically the autocal adaptatio
 Addressed findings: diagnostic-panel overlap; nonexistent Small Signal Factor documentation; diluted verification; partial-authority outliers; duration/weight semantics; covariance normalization; stale speed anchors; missing production feed and mixed-lock tests. Additional covariance regression was added after the follow-up finding.
 
 Remaining limitations: fixed-branch modeling errors can bias fitted anchors; low-authority observations remain noisier; limiter exclusion censors evidence; existing telemetry/menu parity gaps were not expanded into a schema redesign. Do not interpret passing replay/tests as approval for unattended calibration or vehicle operation.
+
+## Four staging fixes — September 6, 2026
+
+Imported individually with original author attribution from the source history of
+sunnypilot staging `40d6afd30042e9a1bb452f42d3b6e67ecd00c98f`
+(release snapshot identifies master `6135084c941d4d947dd90c78326a557c3c857f89`):
+
+- Jason Wen: [cache-size race fix, sunnypilot #1958](https://github.com/sunnypilot/sunnypilot/pull/1958), source `760c19d3f91f79e404f36b020c5df027a5291e48`.
+- Trey Moen: [BSD cleanup option order, openpilot #38728](https://github.com/commaai/openpilot/pull/38728), source `7cf55c3b7a2d9bcee87821e413fa322866f64c5b`.
+- Jason Wen: [FPS-independent scrolling, sunnypilot #1967](https://github.com/sunnypilot/sunnypilot/pull/1967), source `78a766eb6145a416d8d95e323a13b6a914b6f9ff`. Adapted in the existing shared label, preserving 48 px/s rather than importing the newer wrapper/button hierarchy.
+- Trey Moen: [replay stderr progress, openpilot #38734](https://github.com/commaai/openpilot/pull/38734), source `0e320594844b1c1d80aada3f8c51b6e0a1c14115`.
+
+Claude Fable 5.1 reviewed the supplied production diff (no tools); an independent
+Codex reviewer inspected the files and callers. Removed scanf pointer casts, added
+the explicit standard header, and rejected progress beyond the total. No remaining
+blocking introduced findings. Cross-fork descriptor inheritance/cancellation waits,
+unquoted cleanup paths, and removal of the cache directory itself remain pre-existing
+limitations; they were not expanded into separate lifecycle/cleanup changes.
+
+Validation of code tip `52dd687b14`:
+
+- Ruff on both changed Python modules and both new test files: passed locally and on device.
+- `pytest -q -o addopts="" selfdrive/ui/bp/tests/test_staging_ui_fixes.py tools/replay/tests/test_py_downloader.py`: **7 passed** locally with the external Params/messaging shim, and **7 passed on device without the shim**. The C++ test compiles the actual bridge with `-std=c++17 -pthread -Wall -Wextra -Werror`, stubbing only logging, and exercises progress, malformed/out-of-range values, pipe saturation, diagnostics, success, failure, cancellation, and no handler.
+- Device `PYTHONPATH=/data/openpilot PATH=/usr/local/venv/bin:$PATH scons -j4`: **passed**. Initial invocation omitted PYTHONPATH and failed its tinygrad subprocess import; rerunning with the launcher environment succeeded. This is the normal device build, not a clean rebuild; desktop replay is excluded by SConstruct on TICI. The bridge was compiled and executed separately by the test above.
+- Device `pytest -q -o addopts="" selfdrive/ui/bp/tests`: **44 passed, 1 failed**. The unchanged `test_soundd_bp_falls_back_to_stock_on_asset_error` hardcodes generic engage/disengage sounds, whereas production selects TIZI-specific defaults. Reproduced alone; test and relevant sound modules match pre-import device tip `4535c0034`. No sound behavior or test was changed to hide this failure.
+- Broader Mac checks were limited by missing native VisionIPC in the shim and Git LFS sound pointers (36 passed, 5 asset failures when excluding the uncollectable onroad module). Host SCons configuration was blocked by the uninitialized rednose tool module. These are not reported as passes.
+- `git diff --check`: passed. Device remained offroad; spinner image modification preserved. No reboot, UI restart, live calibration change, CAN publishing, or on-road validation was performed. Running UI processes need their normal restart to load the new Python code.
