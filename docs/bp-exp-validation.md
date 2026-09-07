@@ -145,3 +145,46 @@ Validation of code tip `52dd687b14`:
 - Device `pytest -q -o addopts="" selfdrive/ui/bp/tests`: **44 passed, 1 failed**. The unchanged `test_soundd_bp_falls_back_to_stock_on_asset_error` hardcodes generic engage/disengage sounds, whereas production selects TIZI-specific defaults. Reproduced alone; test and relevant sound modules match pre-import device tip `4535c0034`. No sound behavior or test was changed to hide this failure.
 - Broader Mac checks were limited by missing native VisionIPC in the shim and Git LFS sound pointers (36 passed, 5 asset failures when excluding the uncollectable onroad module). Host SCons configuration was blocked by the uninitialized rednose tool module. These are not reported as passes.
 - `git diff --check`: passed. Device remained offroad; spinner image modification preserved. No reboot, UI restart, live calibration change, CAN publishing, or on-road validation was performed. Running UI processes need their normal restart to load the new Python code.
+
+## Unified parser and source-layout verification — September 6, 2026
+
+Parser-only port of James Vecellio-Grant's [sunnypilot #1993](https://github.com/sunnypilot/sunnypilot/pull/1993),
+source `6135084c941d4d947dd90c78326a557c3c857f89`. GPU/compiler changes are excluded.
+The old split-module import remains an alias for legacy modular runners. Added the
+required `ACTION_WIDTH = 2` constant, rejected uninferable widths, and rejected
+inferred plan/lead shapes that downstream consumers cannot handle.
+
+**Important upstream deviation:** unmodified #1993 interleaves means and log-stds
+for 144-value leads. The catalog's original source parsers for
+[RDF `a95e2c25`](https://github.com/commaai/openpilot/blob/a95e2c25cae5fbf1afba7628bfb7acc4af59e0cc/openpilot/selfdrive/modeld/parse_model_outputs.py)
+and [GWM v8 `96e7b310`](https://github.com/commaai/openpilot/blob/96e7b310b164b55fb73abdd505b66fb36630718e/selfdrive/modeld/parse_model_outputs.py)
+instead split all 72 means from all 72 log-stds. Actual artifact outputs confirmed
+that layout. The port preserves it explicitly. The emergency RDF fix had the right
+lead ordering; its successful message publication alone did not establish that.
+
+Validation of code tip `b22e24118c` (equivalent model code on `bp-dev-models`):
+
+- Both branches: **105 modeld tests passed**, including the live-manifest test, on
+  CPU with the external Params/IPC shim. Ruff and whitespace checks passed.
+- Device: **22 parser tests passed without stubs**, including distinct means/stds,
+  batch sizes one/two, legacy weighted hypotheses, split/combined callers and
+  consumer-shape rejection. Full normal `scons -j4` build passed while offroad.
+- Isolated QCOM inference on the cached RDF artifact: three constant-image inputs,
+  **21 fields exactly matching its original source parser** per input. The source
+  leaves `action` raw; the new parser's action decoding is tested separately.
+- Cached GWM v8 split artifact: three constant-image inputs, **22 fields exactly
+  matching #1993 except leads, which match the source-model means-first layout**.
+  Initial combined-only test assumptions and unmodified #1993 lead comparisons
+  failed; those failures led to the split-path test and source-layout correction,
+  not to relaxed numerical tolerances.
+- Claude Fable reviewed the production diff and the subsequent lead-layout
+  correction without tools. Addressed consumer-shape validation; checked callers
+  and the 13 shared parser dimensions. Source inspection and actual inference,
+  not reviewer approval or synthetic expected values alone, resolved lead ordering.
+
+All isolated GPU checks ran offroad with no IPC/CAN publishers and no selected-model
+parameter changes. Constant images validate execution and parsing, **not real-scene
+perception or closed-loop driving**. Chestnut remains disabled. Autocal was enabled
+at the user's request while stationary/disengaged; live controller telemetry showed
+`collect`, zero samples, no error, and unchanged manual factors 1.0/1.1. Camera
+calibration at 0% is a separate issue and is not fixed by enabling Ford autocal.
