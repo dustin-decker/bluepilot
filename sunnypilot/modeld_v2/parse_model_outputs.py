@@ -137,7 +137,13 @@ class Parser:
     if 'wide_from_device_euler' in outs:
       self.parse_mdn('wide_from_device_euler', outs, out_shape=(ModelConstants.WIDE_FROM_DEVICE_WIDTH,))
     if 'lead' in outs:
-      self.parse_mdn('lead', outs, out_shape=(ModelConstants.LEAD_TRAJ_LEN, ModelConstants.LEAD_WIDTH))
+      # BluePilot: RDF's source (commaai/openpilot a95e2c25cae5) packs all lead
+      # means before all log-stds. #1993's generic inference interleaves them.
+      lead_shape = (ModelConstants.LEAD_TRAJ_LEN, ModelConstants.LEAD_WIDTH)
+      if outs['lead'].shape[1] == 2 * ModelConstants.LEAD_MHP_SELECTION * int(np.prod(lead_shape)):
+        lead_shape = (ModelConstants.LEAD_MHP_SELECTION,) + lead_shape
+      self.parse_mdn('lead', outs, out_shape=lead_shape)
+      # End BluePilot
     if 'lat_planner_solution' in outs:
       self.parse_mdn('lat_planner_solution', outs, out_shape=(ModelConstants.IDX_N, ModelConstants.LAT_PLANNER_SOLUTION_WIDTH))
     if 'desired_curvature' in outs:

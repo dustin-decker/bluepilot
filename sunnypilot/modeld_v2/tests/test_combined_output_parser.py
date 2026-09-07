@@ -24,8 +24,8 @@ def test_rdf_parser_through_message_serialization():
   plan = np.arange(495, dtype=np.float32).reshape(1, 33, 15) / 100
   lead = np.arange(72, dtype=np.float32).reshape(1, 3, 6, 4) / 10
   raw[:, 917:1412] = plan.reshape(1, -1)
-  # #1993: each unweighted lead hypothesis contains its own means then log-stds.
-  raw[:, 1907:2051] = np.concatenate((lead.reshape(1, 3, 24), np.zeros((1, 3, 24))), axis=-1).reshape(1, -1)
+  # RDF source ref a95e2c25cae5: all 72 means, then all 72 log-stds.
+  raw[:, 1907:1979] = lead.reshape(1, -1)
   parsed = Parser().parse_outputs({k: raw[:, v].copy() for k, v in RDF_SLICES.items()})
   np.testing.assert_array_equal(parsed['plan'], plan)
   np.testing.assert_array_equal(parsed['lead'], lead)
@@ -76,10 +76,10 @@ def test_inferable_but_unsupported_consumer_shape_is_rejected(name, width):
 
 
 @pytest.mark.parametrize('batch', [1, 2])
-def test_unweighted_leads_keep_per_hypothesis_means_and_stds(batch):
+def test_rdf_leads_keep_source_model_mean_and_std_order(batch):
   means = np.arange(batch * 72, dtype=np.float32).reshape(batch, 3, 24)
   log_stds = np.linspace(-2, 2, batch * 72, dtype=np.float32).reshape(batch, 3, 24)
-  raw = np.concatenate((means, log_stds), axis=-1).reshape(batch, 144)
+  raw = np.concatenate((means.reshape(batch, 72), log_stds.reshape(batch, 72)), axis=-1)
   parsed = Parser().parse_outputs({'lead': raw})
   np.testing.assert_array_equal(parsed['lead'], means.reshape(batch, 3, 6, 4))
   np.testing.assert_allclose(parsed['lead_stds'], np.exp(log_stds).reshape(batch, 3, 6, 4))
