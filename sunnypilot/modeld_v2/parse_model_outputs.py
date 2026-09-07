@@ -151,6 +151,13 @@ class Parser:
       self.parse_categorical_crossentropy('desire_state', outs, out_shape=(ModelConstants.DESIRE_PRED_WIDTH,))
     if 'desire_pred' in outs:
       self.parse_categorical_crossentropy('desire_pred', outs, out_shape=(ModelConstants.DESIRE_PRED_LEN, ModelConstants.DESIRE_PRED_WIDTH))
+    # BluePilot: upstream can infer layouts our fixed-shape consumers cannot use.
+    for name, shape in (('plan', (ModelConstants.IDX_N, ModelConstants.PLAN_WIDTH)),
+                        ('planplus', (ModelConstants.IDX_N, ModelConstants.PLAN_WIDTH)),
+                        ('lead', (ModelConstants.LEAD_MHP_SELECTION, ModelConstants.LEAD_TRAJ_LEN, ModelConstants.LEAD_WIDTH))):
+      if name in outs and outs[name].shape[1:] != shape:
+        raise ValueError(f"Unsupported parsed {name} shape {outs[name].shape}; expected batch x {shape}")
+    # End BluePilot
     return outs
 
   def parse_vision_outputs(self, outs: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
