@@ -1,5 +1,11 @@
 # bp-exp integration and validation
 
+## Current branch: PR #191/#192 removed (2026-09-07)
+
+Restored angle strategy, gain schedule, estimator, and their tests to the integration immediately preceding PR #191. Its latest commit also included PR #192. The original PR commits and dependent retune adaptations are absent from the rewritten branch ancestry. Model/parser updates, PR #194 takeover guards, AutoCal/smoothing, and gauge layout fixes are retained. Version-2 retune evidence and locks are not restored by this version-1 estimator. Factor values require independent retuning; historical results below describe the removed configuration and are not validation of the current controller.
+
+## Historical validation before removal
+
 Experimental branch on Dustin's fork; checked 2026-09-06. This is not a driving-safety certification.
 
 ## Attribution and integration
@@ -188,3 +194,7 @@ perception or closed-loop driving**. Chestnut remains disabled. Autocal was enab
 at the user's request while stationary/disengaged; live controller telemetry showed
 `collect`, zero samples, no error, and unchanged manual factors 1.0/1.1. Camera
 calibration at 0% is a separate issue and is not fixed by enabling Ford autocal.
+
+### Removal validation
+
+The restored AutoCal/lateral/replay CPU suite passes: 105 tests and seven subtests (2026-09-07). The local run uses the existing external messaging shim because this checkout lacks native msgq; device validation is recorded separately. The angle strategy, gain constants, and estimator match the pre-PR integration exactly; the lifecycle additionally rejects retune-version locks.

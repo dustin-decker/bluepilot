@@ -66,3 +66,6 @@ selfdrive/assets/sounds/bluepilot/*.wav -filter -diff -merge
 # Theme pack assets: store directly in Git, not upstream GitLab LFS.
 selfdrive/assets/bp_themes/** -filter -diff -merge
 selfdrive/assets/icons/liveDelay.png -filter -diff -merge
+
+# Reviewed BP component baselines stay available without upstream LFS hosting.
+selfdrive/ui/bp/tests/screenshots/**/*.png -filter -diff -merge

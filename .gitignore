@@ -113,3 +113,22 @@ tools/jotpluggler/layouts/Path_Angle_Analysis.json
 !.opencode/skills/**/SKILL.md
 !.cursor/skills/**/SKILL.md
 !.pi/skills/**/SKILL.md
+# Local report workflow instructions are regenerated and intentionally untracked.
+/.ruler/skills/update-model-report/
+/.agents/skills/update-model-report/
+/.claude/skills/update-model-report/
+/.cursor/skills/update-model-report/
+/.opencode/skills/update-model-report/
+/.pi/skills/update-model-report/
+
+# Local analysis reports, collected evidence, and Serena workspace state.
+/docs/analysis/
+/.serena/
+
+# Local AutoCal analysis skill and generated copies.
+/.ruler/skills/analyze-autocal/
+/.agents/skills/analyze-autocal/
+/.claude/skills/analyze-autocal/
+/.cursor/skills/analyze-autocal/
+/.opencode/skills/analyze-autocal/
+/.pi/skills/analyze-autocal/

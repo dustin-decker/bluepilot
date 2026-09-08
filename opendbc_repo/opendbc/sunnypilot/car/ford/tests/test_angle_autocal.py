@@ -1,7 +1,11 @@
 """Tests for the continuous angle-mode factor auto-calibration (angle_autocal.py)."""
+# Test cases intentionally exercise many parameter combinations; helper interfaces below are typed.
+# mypy: disable-error-code=no-untyped-def
 import json
 import math
 import random
+from collections.abc import Iterable
+from typing import Any
 
 import pytest
 
@@ -21,17 +25,18 @@ PLATFORM_GAIN_HIGH = 1.05  # Mach-E
 DT = 0.05
 
 
-def applied_gain(v, low_factor, high_factor):
+def applied_gain(v: float, low_factor: float, high_factor: float) -> float:
   a = speed_alpha(v)
   return (1.0 - a) * (LOW_ANCHOR_BASE * low_factor) + a * (PLATFORM_GAIN_HIGH * high_factor)
 
 
-def ideal_gain(v, true_low, true_high):
+def ideal_gain(v: float, true_low: float, true_high: float) -> float:
   return applied_gain(v, true_low, true_high)
 
 
-def feed_plant(est, true_low, true_high, speeds, applied_low=1.0, applied_high=1.0,
-               kappa=0.002, n_per_speed=200, noise=0.0, seed=42):
+def feed_plant(est: AngleFactorEstimator, true_low: float, true_high: float, speeds: Iterable[float],
+               applied_low: float = 1.0, applied_high: float = 1.0, kappa: float = 0.002,
+               n_per_speed: int = 200, noise: float = 0.0, seed: int = 42) -> None:
   """Feed samples from a plant whose true gain corresponds to the given ideal factors.
 
   The plant's response ratio r = applied_gain / ideal_gain: if the applied factors already
@@ -47,14 +52,15 @@ def feed_plant(est, true_low, true_high, speeds, applied_low=1.0, applied_high=1
 
 
 class TestAngleFactorEstimator:
-  def test_recovers_true_factors(self):
+  def test_recovers_true_factors(self) -> None:
     est = AngleFactorEstimator(PLATFORM_GAIN_HIGH)
     feed_plant(est, 0.92, 1.21, speeds=[10, 12, 15, 18, 21, 24, 27, 29], n_per_speed=200, noise=0.03)
-    low, high, _ = est.solve()
+    assert (sol := est.solve()) is not None
+    low, high, _ = sol
     assert abs(low - 0.92) < 0.02, low
     assert abs(high - 1.21) < 0.02, high
 
-  def test_invariant_to_applied_factor_trajectory(self):
+  def test_invariant_to_applied_factor_trajectory(self) -> None:
     # Half the drive on one applied pair, half on another: same truth must come out.
     # This is the property that keeps the nudge loop stable.
     est = AngleFactorEstimator(PLATFORM_GAIN_HIGH)
@@ -62,11 +68,12 @@ class TestAngleFactorEstimator:
                n_per_speed=150, noise=0.03, seed=1)
     feed_plant(est, 0.92, 1.21, speeds=[10, 15, 20, 25, 29], applied_low=0.95, applied_high=1.20,
                n_per_speed=150, noise=0.03, seed=2)
-    low, high, _ = est.solve()
+    assert (sol := est.solve()) is not None
+    low, high, _ = sol
     assert abs(low - 0.92) < 0.02, low
     assert abs(high - 1.21) < 0.02, high
 
-  def test_rejects_bad_samples(self):
+  def test_rejects_bad_samples(self) -> None:
     est = AngleFactorEstimator(PLATFORM_GAIN_HIGH)
     g = applied_gain(20.0, 1.0, 1.0)
     assert not est.add_sample(20.0, 0.0005, 0.0005, g)   # below curvature threshold
@@ -77,20 +84,21 @@ class TestAngleFactorEstimator:
     assert est.n == 0
     assert est.add_sample(29.0, 0.0025, 0.0025, g)       # 2.1 m/s^2 — within tire limits
 
-  def test_factor_clamp(self):
+  def test_factor_clamp(self) -> None:
     est = AngleFactorEstimator(PLATFORM_GAIN_HIGH)
     feed_plant(est, 2.5, 0.2, speeds=[10, 20, 29], n_per_speed=100)
-    low, high, _ = est.solve()
+    assert (sol := est.solve()) is not None
+    low, high, _ = sol
     assert low == 1.5 and high == 0.5  # clamped to the +/- button range
 
-  def test_decay_halves_weight_at_tau_ln2(self):
+  def test_decay_halves_weight_at_tau_ln2(self) -> None:
     est = AngleFactorEstimator(PLATFORM_GAIN_HIGH)
     feed_plant(est, 1.0, 1.0, speeds=[10, 29], n_per_speed=100)
     w0 = est.s_w
     est.decay(TAU_EVIDENCE_S * math.log(2.0))
     assert abs(est.s_w - 0.5 * w0) < 1e-9
 
-  def test_lr_divergence_flags_bank_bias(self):
+  def test_lr_divergence_flags_bank_bias(self) -> None:
     est = AngleFactorEstimator(PLATFORM_GAIN_HIGH)
     n = int((LR_MIN_WEIGHT + 2) / DT)
     g_hi = applied_gain(28.0, 1.0, 1.0)
@@ -102,10 +110,11 @@ class TestAngleFactorEstimator:
       est.add_sample(10.0, 0.002, 0.002 * 1.10, g, weight=DT)
       est.add_sample(10.0, -0.002, -0.002 * 0.90, g, weight=DT)
     assert est.lr_divergence(0) > LR_TOL
-    _, _, st = est.solve()
+    assert (sol := est.solve()) is not None
+    _, _, st = sol
     assert st["stderr_eff_low"] > st["stderr_low"]  # divergence inflates the effective error
 
-  def test_serialization_round_trip(self):
+  def test_serialization_round_trip(self) -> None:
     est = AngleFactorEstimator(PLATFORM_GAIN_HIGH)
     feed_plant(est, 0.95, 1.12, speeds=[10, 15, 20, 25, 29], n_per_speed=120, noise=0.02)
     d = json.loads(json.dumps(est.to_dict()))  # through real JSON, like the param
@@ -116,7 +125,7 @@ class TestAngleFactorEstimator:
 
 
 class TestSteadyStateGate:
-  def test_requires_sustained_steady(self):
+  def test_requires_sustained_steady(self) -> None:
     gate = SteadyStateGate(dt=DT)
     needed = int(STEADY_TIME_S / DT)
     results = [gate.update(True, MIN_KAPPA * 2, False, False, False)
@@ -124,7 +133,7 @@ class TestSteadyStateGate:
     assert not any(results[:needed - 1])
     assert results[-1]
 
-  def test_resets_on_any_flag(self):
+  def test_resets_on_any_flag(self) -> None:
     gate = SteadyStateGate(dt=DT)
     for _ in range(int(STEADY_TIME_S / DT) + 1):
       gate.update(True, MIN_KAPPA * 2, False, False, False)
@@ -132,7 +141,7 @@ class TestSteadyStateGate:
     gate.update(True, MIN_KAPPA * 2, True, False, False)  # pressed
     assert gate.steady_s == 0.0
 
-  def test_ramp_within_relative_bound_admitted(self):
+  def test_ramp_within_relative_bound_admitted(self) -> None:
     # Lag alignment absorbs the transport delay, so a genuinely winding road — kappa
     # moving at up to REL_KAPPA_RATE of itself — IS evidence now. This ramp (25%/s
     # relative) was rejected by the old frozen-command gate; that starvation discarded
@@ -145,7 +154,7 @@ class TestSteadyStateGate:
       k += 0.25 * k * DT
     assert admitted
 
-  def test_ramp_beyond_relative_bound_rejected(self):
+  def test_ramp_beyond_relative_bound_rejected(self) -> None:
     # Twice the relative bound: the residual delay-estimate error would bias these
     # ratios beyond what the stderr machinery is sized for — still rejected.
     gate = SteadyStateGate(dt=DT)
@@ -156,12 +165,12 @@ class TestSteadyStateGate:
       k += 2.0 * REL_KAPPA_RATE * k * DT
     assert not admitted
 
-  def test_saturation_blocks(self):
+  def test_saturation_blocks(self) -> None:
     gate = SteadyStateGate(dt=DT)
     for _ in range(int(STEADY_TIME_S / DT) + 2):
       assert not gate.update(True, 0.002, False, False, False, saturated=True)
 
-  def test_light_torque_starts_cooldown(self):
+  def test_light_torque_starts_cooldown(self) -> None:
     gate = SteadyStateGate(dt=DT)
     gate.update(True, 0.002, False, False, False, driver_torque=0.7)
     assert gate.grip_cooldown_s > 0.0
@@ -171,7 +180,7 @@ class TestSteadyStateGate:
 
 
 class TestQualityMonitor:
-  def test_clean_cornering_never_rejected(self):
+  def test_clean_cornering_never_rejected(self) -> None:
     q = QualityMonitor(dt=DT)
     # A realistic apex sweep: command and measurement move together at plausible rates.
     t = 0.0
@@ -183,7 +192,7 @@ class TestQualityMonitor:
     assert ok_all
     assert all(v == 0 for v in q.counters.values())
 
-  def test_flick_blanks_and_recovers(self):
+  def test_flick_blanks_and_recovers(self) -> None:
     q = QualityMonitor(dt=DT)
     for _ in range(50):
       assert q.update(0.002, 0.002)
@@ -198,20 +207,20 @@ class TestQualityMonitor:
     assert q.update(0.002, 0.002)
     assert q.counters["flick"] > 0
 
-  def test_command_tracking_spike_is_not_flick(self):
+  def test_command_tracking_spike_is_not_flick(self) -> None:
     # The measurement racing after a moving command is control, not disturbance.
     q = QualityMonitor(dt=DT)
     q.update(0.002, 0.002)
     q.update(0.002 + 0.001, 0.002 + SPIKE_MEAS_RATE * DT * 2)  # command moved too
     assert not q.flick_fired
 
-  def test_wheel_speed_jump_corroborates(self):
+  def test_wheel_speed_jump_corroborates(self) -> None:
     q = QualityMonitor(dt=DT)
     q.update(0.002, 0.002, ws_spread=0.05)
     assert not q.update(0.002, 0.002, ws_spread=0.05 + WS_SPREAD_JUMP * 1.5)
     assert q.flick_fired
 
-  def test_rough_road_blocks_until_settled(self):
+  def test_rough_road_blocks_until_settled(self) -> None:
     q = QualityMonitor(dt=DT)
     rng = random.Random(7)
     # Washboard: broadband measurement noise well above the RMS threshold.
@@ -222,15 +231,15 @@ class TestQualityMonitor:
     assert rejected > 100
     assert q.counters["rough"] + q.counters["flick"] == rejected
 
-  def test_long_accel_rejects(self):
+  def test_long_accel_rejects(self) -> None:
     q = QualityMonitor(dt=DT)
     assert q.update(0.002, 0.002, a_ego=MAX_LONG_ACCEL * 0.5)
     assert not q.update(0.002, 0.002, a_ego=MAX_LONG_ACCEL * 1.5)
     assert q.counters["accel"] == 1
 
 
-def _sine_apex_drive(pm, v, amp, period_s, n_frames, gain_ratio=1.0, lag_frames=6,
-                     ok=True, dt=DT):
+def _sine_apex_drive(pm: PeakMatcher, v: float, amp: float, period_s: float, n_frames: int,
+                     gain_ratio: float = 1.0, lag_frames: int = 6, ok: bool = True, dt: float = DT) -> list[tuple[float, float, float, float]]:
   """Drive the peak matcher with a sinusoidal command and a lagged, scaled measurement.
   Returns all committed samples."""
   out = []
@@ -246,7 +255,7 @@ def _sine_apex_drive(pm, v, amp, period_s, n_frames, gain_ratio=1.0, lag_frames=
 
 
 class TestPeakMatcher:
-  def test_recovers_gain_ratio_from_lagged_sine(self):
+  def test_recovers_gain_ratio_from_lagged_sine(self) -> None:
     pm = PeakMatcher(dt=DT)
     committed = _sine_apex_drive(pm, v=12.0, amp=0.003, period_s=8.0, n_frames=2400,
                                  gain_ratio=0.92)
@@ -254,7 +263,7 @@ class TestPeakMatcher:
     for (_v, k_cmd, k_meas, _g) in committed:
       assert abs(k_meas / k_cmd - 0.92) < 0.02
 
-  def test_ripple_below_prominence_never_fires(self):
+  def test_ripple_below_prominence_never_fires(self) -> None:
     pm = PeakMatcher(dt=DT)
     committed = _sine_apex_drive(pm, v=12.0, amp=PEAK_PROMINENCE * 0.4 + PEAK_MIN_KAPPA,
                                  period_s=1.6, n_frames=1200)
@@ -262,7 +271,7 @@ class TestPeakMatcher:
     # dominant and nothing commits.
     assert committed == []
 
-  def test_poisoned_window_discards_apex(self):
+  def test_poisoned_window_discards_apex(self) -> None:
     pm = PeakMatcher(dt=DT)
     n = 0
     hist = []
@@ -279,7 +288,7 @@ class TestPeakMatcher:
     n_clean = len(_sine_apex_drive(pm2, v=12.0, amp=0.003, period_s=8.0, n_frames=2400))
     assert n <= n_clean  # the poisoned apex (and only that region) was lost
 
-  def test_median_of_three_kills_single_outlier(self):
+  def test_median_of_three_kills_single_outlier(self) -> None:
     pm = PeakMatcher(dt=DT)
     committed = []
     hist = []
@@ -298,8 +307,8 @@ class TestPeakMatcher:
       assert abs(k_meas / k_cmd) < 1.5  # the 2.2x apex never got committed
 
 
-def run_pipeline(pipe, n, torque=0.0, pressed=False, saturated=False, kappa=0.002, v=20.0,
-                 low=1.0, high=1.0):
+def run_pipeline(pipe: AutoCalPipeline, n: int, torque: float = 0.0, pressed: bool = False, saturated: bool = False, kappa: float = 0.002, v: float = 20.0,
+                 low: float = 1.0, high: float = 1.0) -> list[tuple[float, float, float]]:
   committed = []
   for _ in range(n):
     committed += pipe.update(_frame(v, kappa, kappa, pressed=pressed,
@@ -309,14 +318,14 @@ def run_pipeline(pipe, n, torque=0.0, pressed=False, saturated=False, kappa=0.00
 
 
 class TestAutoCalPipeline:
-  def test_commits_after_holdback(self):
+  def test_commits_after_holdback(self) -> None:
     pipe = AutoCalPipeline(PLATFORM_GAIN_HIGH)
     warm = int((STEADY_TIME_S + PRESS_HOLDBACK_S) / DT) + 3 + _LAG_F
     committed = run_pipeline(pipe, warm)
     assert pipe.est.n > 0
     assert len(committed) == pipe.est.n
 
-  def test_grip_cancels_staged_samples(self):
+  def test_grip_cancels_staged_samples(self) -> None:
     pipe = AutoCalPipeline(PLATFORM_GAIN_HIGH)
     warm = int(STEADY_TIME_S / DT) + 1 + int(PRESS_HOLDBACK_S / DT) // 2 + _LAG_F
     run_pipeline(pipe, warm)
@@ -325,7 +334,7 @@ class TestAutoCalPipeline:
     assert len(pipe._staged) == 0
     assert pipe.est.n == 0  # nothing from before the grip ever reached the estimator
 
-  def test_disturbance_cancels_staged_samples(self):
+  def test_disturbance_cancels_staged_samples(self) -> None:
     pipe = AutoCalPipeline(PLATFORM_GAIN_HIGH)
     warm = int(STEADY_TIME_S / DT) + 1 + int(PRESS_HOLDBACK_S / DT) // 2 + _LAG_F
     run_pipeline(pipe, warm)
@@ -337,12 +346,12 @@ class TestAutoCalPipeline:
     committed = run_pipeline(pipe, int(DISTURBANCE_BLANK_S / DT) - 2)
     assert committed == []
 
-  def test_saturated_frames_never_commit(self):
+  def test_saturated_frames_never_commit(self) -> None:
     pipe = AutoCalPipeline(PLATFORM_GAIN_HIGH)
     committed = run_pipeline(pipe, 100, saturated=True)
     assert committed == [] and pipe.est.n == 0
 
-  def test_idle_clears_staging(self):
+  def test_idle_clears_staging(self) -> None:
     pipe = AutoCalPipeline(PLATFORM_GAIN_HIGH)
     run_pipeline(pipe, int(STEADY_TIME_S / DT) + 5 + _LAG_F)
     assert len(pipe._staged) > 0
@@ -350,7 +359,7 @@ class TestAutoCalPipeline:
     assert len(pipe._staged) == 0 and pipe.gate.steady_s == 0.0
     assert pipe._hist == []  # alignment must never target commands across a discontinuity
 
-  def test_unsettled_measurement_not_staged(self):
+  def test_unsettled_measurement_not_staged(self) -> None:
     pipe = AutoCalPipeline(PLATFORM_GAIN_HIGH)
     warm = int((STEADY_TIME_S + PRESS_HOLDBACK_S) / DT) + 10
     kappa_meas = 0.0010
@@ -363,14 +372,14 @@ class TestAutoCalPipeline:
     assert staged_during_sweep == 0
     assert pipe.est.n > 0
 
-  def test_near_limit_evidence_downweighted_to_zero(self):
+  def test_near_limit_evidence_downweighted_to_zero(self) -> None:
     pipe = AutoCalPipeline(PLATFORM_GAIN_HIGH)
     # kappa*v^2 = 2.55 > MAX_LAT_ACCEL: hard-rejected as 'limit'.
     committed = run_pipeline(pipe, 60, kappa=0.0034, v=27.4)
     assert committed == []
     assert pipe.quality.counters["limit"] > 0
 
-  def test_pipeline_serialization_round_trip(self):
+  def test_pipeline_serialization_round_trip(self) -> None:
     pipe = AutoCalPipeline(PLATFORM_GAIN_HIGH)
     run_pipeline(pipe, 200)
     pipe.stable_s = 123.0
@@ -385,7 +394,7 @@ class TestAutoCalPipeline:
     assert pipe2.verify_result[0] == "confirmed" and pipe2.verify_hold[1] == 12.0
 
 
-def _evidenced_pipe(true_low=1.10, true_high=1.10, applied=(1.0, 1.0), weight_s=15.0):
+def _evidenced_pipe(true_low: float = 1.10, true_high: float = 1.10, applied: tuple[float, float] = (1.0, 1.0), weight_s: float = 15.0) -> AutoCalPipeline:
   """Pipeline with clean steady evidence at both anchors against a known plant."""
   pipe = AutoCalPipeline(PLATFORM_GAIN_HIGH)
   n = int(weight_s / DT)
@@ -400,8 +409,8 @@ def _evidenced_pipe(true_low=1.10, true_high=1.10, applied=(1.0, 1.0), weight_s=
   return pipe
 
 
-def _feed_low(pipe, applied, seconds, true_low, true_high, ratio_scale=1.0,
-              v=10.0, kappa=0.004):
+def _feed_low(pipe: AutoCalPipeline, applied: tuple[float, float], seconds: float, true_low: float, true_high: float, ratio_scale: float = 1.0,
+              v: float = 10.0, kappa: float = 0.002) -> None:
   """Steady low-band frames from the plant under the given applied factors; ratio_scale
   != 1 makes the car respond off-model (the adjust-then-verify failure case)."""
   g = applied_gain(v, applied[0], applied[1])
@@ -414,10 +423,10 @@ def _feed_low(pipe, applied, seconds, true_low, true_high, ratio_scale=1.0,
 
 
 class TestFactorNudger:
-  def _evidenced_pipe(self, **kw):
+  def _evidenced_pipe(self, **kw: Any) -> AutoCalPipeline:
     return _evidenced_pipe(**kw)
 
-  def test_nudges_toward_target_bounded(self):
+  def test_nudges_toward_target_bounded(self) -> None:
     # err 0.10, damped by NUDGE_GAIN then capped: a big-but-bounded step, not the whole error.
     pipe = self._evidenced_pipe(true_low=1.10, true_high=1.10)
     rec = pipe.recommend(1.0, 1.0)
@@ -426,19 +435,19 @@ class TestFactorNudger:
     assert low == round(1.0 + NUDGE_MAX_STEP, 2)
     assert high == round(1.0 + NUDGE_MAX_STEP, 2)
 
-  def test_single_step_when_close(self):
+  def test_single_step_when_close(self) -> None:
     # A target ~0.01 away moves by exactly one menu step (the point of damped stepping).
     pipe = self._evidenced_pipe(true_low=1.01, true_high=1.01)
     rec = pipe.recommend(1.0, 1.0)
     assert rec is not None
     assert rec[0] == round(1.0 + FACTOR_STEP, 2) and rec[1] == round(1.0 + FACTOR_STEP, 2)
 
-  def test_deadband_no_nudge(self):
+  def test_deadband_no_nudge(self) -> None:
     # Inside the implicit deadband (|gain*err| < half a step): leave it alone.
     pipe = self._evidenced_pipe(true_low=1.004, true_high=1.004)
     assert pipe.recommend(1.0, 1.0) is None
 
-  def test_nudge_units_damped_and_capped(self):
+  def test_nudge_units_damped_and_capped(self) -> None:
     cap = round(NUDGE_MAX_STEP / FACTOR_STEP)
     assert nudge_units(0.0) == 0
     assert nudge_units(0.004) == 0          # implicit deadband
@@ -446,7 +455,7 @@ class TestFactorNudger:
     assert nudge_units(0.10) == cap         # far: damped then capped
     assert nudge_units(-0.10) == -cap       # symmetric
 
-  def test_rate_limited(self):
+  def test_rate_limited(self) -> None:
     pipe = self._evidenced_pipe()
     assert pipe.recommend(1.0, 1.0) is not None
     assert pipe.recommend(1.02, 1.02) is None  # inside NUDGE_PERIOD_S
@@ -455,11 +464,11 @@ class TestFactorNudger:
       pipe.update(_frame(10.0, 0.004, 0.004, low=1.02, high=1.02))
     assert pipe.recommend(1.02, 1.02) is not None
 
-  def test_insufficient_evidence_no_nudge(self):
+  def test_insufficient_evidence_no_nudge(self) -> None:
     pipe = self._evidenced_pipe(weight_s=NUDGE_MIN_WEIGHT * 0.3)
     assert pipe.recommend(1.0, 1.0) is None
 
-  def test_no_cumulative_cap_walks_to_the_fit(self):
+  def test_no_cumulative_cap_walks_to_the_fit(self) -> None:
     # 2026-07-22 design decision: no per-drive movement cap. A car that is genuinely
     # 40% off must be allowed to walk all the way in one drive, as long as every step
     # keeps verifying against fresh evidence (the plant here always agrees).
@@ -476,7 +485,7 @@ class TestFactorNudger:
     assert applied[0] >= 1.35, applied      # far past the old 0.04/0.10 caps
     assert pipe.verify_result[0] == "confirmed"  # and every step was checked on the way
 
-  def test_user_edit_soft_resets(self):
+  def test_user_edit_soft_resets(self) -> None:
     pipe = self._evidenced_pipe()
     w0 = pipe.est.s_w
     pipe.stable_s = 100.0
@@ -492,7 +501,7 @@ class TestLagAlignment:
   lateral_delay ago, so winding roads (a moving command) become usable evidence without
   lag bias — the exact scenario the old frozen-command gate had to discard."""
 
-  def _ramped_pipe(self, true_gain_ratio, lag_frames=4, n=1200, rel_rate=0.25):
+  def _ramped_pipe(self, true_gain_ratio: float, lag_frames: int = 4, n: int = 1200, rel_rate: float = 0.25) -> AutoCalPipeline:
     """Plant with a PURE transport delay: meas(t) = ratio * cmd(t - lag). The command
     ramps continuously at rel_rate (within the admission bound) — under the old gate
     this drive yields nothing; under alignment it must recover the ratio exactly."""
@@ -508,14 +517,14 @@ class TestLagAlignment:
         k = 0.002  # saw-tooth reset; the drop is a huge rate step the gate must absorb
     return pipe
 
-  def test_recovers_ratio_from_delayed_moving_command(self):
+  def test_recovers_ratio_from_delayed_moving_command(self) -> None:
     # Car delivers 90% of requested with a 0.2s transport delay, command always moving.
     pipe = self._ramped_pipe(0.90)
     assert pipe.est.n > 100  # the old gate got ~zero here
     _w, r = pipe.est.recent_response(0)  # all evidence at v=10 -> low half
     assert r is not None and abs(r - 0.90) < 0.005, r  # aligned ratio is exact, not lag-biased
 
-  def test_same_frame_ratio_would_have_been_biased(self):
+  def test_same_frame_ratio_would_have_been_biased(self) -> None:
     # Sanity for the whole design: on this plant the same-frame ratio is NOT the gain —
     # the lag makes it read low on a rising ramp. Alignment is what removes that bias.
     k = 0.002
@@ -528,13 +537,13 @@ class TestLagAlignment:
       k *= 1.0 + 0.25 * DT
     assert max(biased) < 0.90 - 0.01  # every same-frame sample reads low
 
-  def test_no_evidence_before_history_fills(self):
+  def test_no_evidence_before_history_fills(self) -> None:
     pipe = AutoCalPipeline(PLATFORM_GAIN_HIGH)
     for _ in range(_LAG_F - 2):
       pipe.update(_frame(10.0, 0.003, 0.003))
     assert pipe._staged == [] and pipe.est.n == 0
 
-  def test_delay_clamped_to_trust_window(self):
+  def test_delay_clamped_to_trust_window(self) -> None:
     # An absurd liveDelay value must not demand an absurd history depth.
     pipe = AutoCalPipeline(PLATFORM_GAIN_HIGH)
     warm = int((STEADY_TIME_S + PRESS_HOLDBACK_S) / DT) + 3 + int(round(0.42 / DT)) + 1
@@ -547,7 +556,7 @@ class TestQuietGate:
   """Loop hunting must never become gain evidence — the user's criterion, 2026-07-23:
   taking 1-4 passes per step is fine; moving the needle on mid-dynamics data is not."""
 
-  def test_hunting_yields_almost_no_evidence(self):
+  def test_hunting_yields_almost_no_evidence(self) -> None:
     # Same duration, same command: a calm constant-deficit plant vs a hunting plant
     # whose error swings on a ~3s loop cycle (all swings INSIDE the rate bounds that
     # used to admit them). The hunting run must yield a small fraction of the weight.
@@ -560,7 +569,7 @@ class TestQuietGate:
     assert quiet.est.s_w > 0
     assert hunt.est.s_w < 0.35 * quiet.est.s_w, (hunt.est.s_w, quiet.est.s_w)
 
-  def test_constant_deficit_is_calm_and_admitted(self):
+  def test_constant_deficit_is_calm_and_admitted(self) -> None:
     # A steady plant deficit keeps a FLAT error trend: exactly the signal we want,
     # and the quiet gate must not confuse it with dynamics.
     pipe = AutoCalPipeline(PLATFORM_GAIN_HIGH)
@@ -575,14 +584,14 @@ class TestAdjustVerify:
   again — the no-cap regime's runaway protection ('poll a couple turns, adjust, poll
   some more', made enforceable)."""
 
-  def test_step_opens_verify_window(self):
+  def test_step_opens_verify_window(self) -> None:
     pipe = _evidenced_pipe()
     rec = pipe.recommend(1.0, 1.0)
     assert rec is not None
     assert pipe.verify[0] is not None and pipe.verify[0]["to"] == rec[0]
     assert pipe.est.recent[0] == [0.0, 0.0]  # the judgment sees only post-step data
 
-  def test_no_second_step_until_fresh_evidence(self):
+  def test_no_second_step_until_fresh_evidence(self) -> None:
     pipe = _evidenced_pipe(true_low=1.40, true_high=1.40)
     rec = pipe.recommend(1.0, 1.0)
     assert rec is not None
@@ -597,7 +606,7 @@ class TestAdjustVerify:
     assert pipe.verify_result[0] == "confirmed"
     assert pipe.recommend(*rec) is not None
 
-  def test_failed_verify_holds_anchor(self):
+  def test_failed_verify_holds_anchor(self) -> None:
     pipe = _evidenced_pipe(true_low=1.10, true_high=1.10)
     rec = pipe.recommend(1.0, 1.0)
     assert rec is not None and rec[0] > 1.0   # stepped UP toward the fit
@@ -614,7 +623,7 @@ class TestAdjustVerify:
     _feed_low(pipe, rec, VERIFY_FAIL_HOLD_WEIGHT + 4.0, 1.10, 1.10, ratio_scale=0.85)
     assert pipe.recommend(*rec) is not None
 
-  def test_lock_disabled_never_freezes(self):
+  def test_lock_disabled_never_freezes(self) -> None:
     # FordAngleAutoCalLock off: stability may accumulate forever, the pipeline must not
     # lock — continuous adaptation for the life of the toggle. Lock-eligible evidence
     # (weights past LOCK_MIN_WEIGHT, target == applied) is earned for real so the
@@ -628,7 +637,7 @@ class TestAdjustVerify:
     assert not pipe.locked
     assert pipe.stable_s > LOCK_STABLE_S  # kept counting straight past the threshold
 
-  def test_verify_state_survives_serialization(self):
+  def test_verify_state_survives_serialization(self) -> None:
     pipe = _evidenced_pipe()
     rec = pipe.recommend(1.0, 1.0)
     assert rec is not None
@@ -640,34 +649,35 @@ class TestAdjustVerify:
 
 
 class TestRecentResponse:
-  def test_tracks_current_ratio(self):
+  def test_tracks_current_ratio(self) -> None:
     est = AngleFactorEstimator(PLATFORM_GAIN_HIGH)
     g = applied_gain(10.0, 1.0, 1.0)
     for _ in range(100):
       est.add_sample(10.0, 0.002, 0.002 * 0.93, g, weight=DT)
     w, r = est.recent_response(0)
-    assert abs(r - 0.93) < 1e-9 and w > 4.0   # "turns 93% of requested"
+    assert r is not None and abs(r - 0.93) < 1e-9 and w > 4.0   # "turns 93% of requested"
     assert est.recent_response(1)[1] is None  # no high-band evidence yet
 
 
 class TestUiState:
-  def test_propose_then_verify_phases(self):
+  def test_propose_then_verify_phases(self) -> None:
     pipe = _evidenced_pipe(true_low=1.10, true_high=1.10)
     ui = pipe.ui_state(1.0, 1.0)
     assert ui["low"]["ph"] == "propose" and ui["low"]["t"] > 1.0
     assert abs(ui["low"]["r"] - 1.0 / 1.10) < 0.02
     json.dumps(ui)  # must survive the telemetry string
     rec = pipe.recommend(1.0, 1.0)
+    assert rec is not None
     ui = pipe.ui_state(*rec)
     assert ui["low"]["ph"] == "verify" and ui["low"]["to"] == rec[0]
 
-  def test_collect_phase_before_evidence(self):
+  def test_collect_phase_before_evidence(self) -> None:
     pipe = AutoCalPipeline(PLATFORM_GAIN_HIGH)
     ui = pipe.ui_state(1.0, 1.0)
     assert ui["low"]["ph"] == "collect" and ui["high"]["ph"] == "collect"
     json.dumps(ui)
 
-  def test_good_phase_when_matched(self):
+  def test_good_phase_when_matched(self) -> None:
     pipe = _evidenced_pipe(true_low=1.0, true_high=1.0)
     ui = pipe.ui_state(1.0, 1.0)
     assert ui["low"]["ph"] == "good" and ui["high"]["ph"] == "good"
@@ -680,7 +690,8 @@ class TestClosedLoopConvergence:
 
   TRUE_LOW, TRUE_HIGH = 1.02, 1.15
 
-  def _drive(self, pipe, applied, seconds, v, kappa_amp, rng):
+  def _drive(self, pipe: AutoCalPipeline, applied: list[float], seconds: float, v: float, kappa_amp: float,
+             rng: random.Random) -> tuple[list[float], list[tuple[float, float]]]:
     """Alternating-direction steady arcs with brief transitions; occasional bumps and
     grips. Plant: first-order lag toward gain-scaled command. Nudges applied live."""
     lag_tau = 0.35
@@ -710,7 +721,7 @@ class TestClosedLoopConvergence:
         break
     return applied, nudge_log
 
-  def test_converges_and_locks(self):
+  def test_converges_and_locks(self) -> None:
     rng = random.Random(11)
     applied = [1.00, 1.00]
     pipe = AutoCalPipeline(PLATFORM_GAIN_HIGH)
@@ -736,8 +747,9 @@ class TestClosedLoopConvergence:
     assert all(l2 >= l1 - NUDGE_MAX_STEP - 1e-9 for l1, l2 in zip(lows, lows[1:], strict=False)), lows
 
 
-def _frame(v, kc, km, pressed=False, rate=False, dev=False, saturated=False,
-           torque=0.0, a_ego=0.0, ws=None, low=1.0, high=1.0, lat_delay=0.2) -> Frame:
+def _frame(v: float, kc: float, km: float, pressed: bool = False, rate: bool = False, dev: bool = False, saturated: bool = False,
+           torque: float = 0.0, a_ego: float = 0.0, ws: float | None = None, low: float = 1.0,
+           high: float = 1.0, lat_delay: float = 0.2) -> Frame:
   """Test scaffolding: Frame with benign defaults (the production dataclass has none)."""
   return Frame(v_ego=v, kappa_cmd=kc, kappa_meas=km, steering_pressed=pressed,
                angle_rate_limited=rate, deviation_limited=dev, saturated=saturated,
@@ -773,19 +785,19 @@ class _MockParams:
   # the default for unwritten keys, so the mock must too.
   _BOOL_DEFAULTS = {"FordAngleAutoCalLock": True}
 
-  def __init__(self, values):
+  def __init__(self, values: dict[str, Any]) -> None:
     self.values = values
-    self.written = {}
+    self.written: dict[str, Any] = {}
 
-  def get(self, key, return_default=False):
+  def get(self, key: str, return_default: bool = False) -> Any:
     return self.values.get(key)
 
-  def get_bool(self, key):
+  def get_bool(self, key: str) -> bool:
     if key not in self.values:
       return self._BOOL_DEFAULTS.get(key, False)
     return bool(self.values.get(key))
 
-  def put(self, key, value, block=False):
+  def put(self, key: str, value: Any, block: bool = False) -> None:
     # The real Params.put lands immediately when block=True; this mock always lands
     # immediately, so both paths behave the same here (readable on the next get).
     expected = self._TYPES.get(key)
@@ -794,7 +806,7 @@ class _MockParams:
     self.values[key] = value
     self.written[key] = value
 
-  def put_bool(self, key, value):
+  def put_bool(self, key: str, value: bool) -> None:
     self.put(key, bool(value))
 
 
@@ -803,12 +815,12 @@ class TestOnboardGlue:
   pipeline cannot see. This is the class of test that caught the on-device card
   crash-loop (stale attribute) that component tests missed."""
 
-  def _ext(self):
+  def _ext(self) -> Any:
     pytest.importorskip("cereal.messaging")  # linux-only
     from opendbc.sunnypilot.car.ford.lateral_angle_ext import LateralAngleExt
 
     class _Harness(LateralAngleExt):
-      def _ensure_lateral_curv_initialized(self, CP):
+      def _ensure_lateral_curv_initialized(self, CP: Any) -> None:
         pass
 
     ext = _Harness()
@@ -818,17 +830,17 @@ class TestOnboardGlue:
     ext.CP = _CP()
     return ext
 
-  def _tick(self, ext, p, n=1):
+  def _tick(self, ext: Any, p: _MockParams, n: int = 1) -> None:
     for _ in range(100 * n):
       ext.update_angle_params(p)
 
-  def test_param_glue_runs_without_error(self):
+  def test_param_glue_runs_without_error(self) -> None:
     ext = self._ext()
     p = _MockParams({"FordAngleAutoCal": 0, "FordAngleAutoCalState": ""})
     self._tick(ext, p, n=2)
     assert ext.autocal_ctl.pipeline is None and not ext.autocal_enabled
 
-  def test_arming_builds_pipeline_with_baseline(self):
+  def test_arming_builds_pipeline_with_baseline(self) -> None:
     ext = self._ext()
     p = _MockParams({"FordAngleAutoCal": 1, "FordAngleAutoCalState": "",
                      "FordLowSpeedFactor_ang": "1.10", "FordHighSpeedFactor_ang": "0.95"})
@@ -836,7 +848,7 @@ class TestOnboardGlue:
     assert ext.autocal_enabled and ext.autocal_ctl.pipeline is not None
     assert ext.autocal_ctl._last_written == (1.10, 0.95)
 
-  def test_arming_restores_serialized_evidence(self):
+  def test_arming_restores_serialized_evidence(self) -> None:
     donor = AutoCalPipeline(PLATFORM_GAIN_HIGH)
     feed_plant(donor.est, 1.05, 1.05, speeds=[10, 28], n_per_speed=200)
     state = json.dumps({"v": 1, "phase": "collecting", "pipe": donor.to_dict()})
@@ -848,26 +860,26 @@ class TestOnboardGlue:
     assert ext.autocal_ctl.pipeline.est.n == donor.est.n
     assert ext.autocal_ctl.pipeline.est.solve() == donor.est.solve()
 
-  def test_locked_json_never_arms(self):
+  def test_locked_json_never_arms(self) -> None:
     ext = self._ext()
     state = json.dumps({"v": 1, "phase": "locked", "pipe": {}})
     p = _MockParams({"FordAngleAutoCal": 1, "FordAngleAutoCalState": state})
     ext.update_angle_params(p)
     assert ext.autocal_ctl.pipeline is None and ext.autocal_ctl.done and not ext.autocal_enabled
 
-  def test_legacy_done_state_never_arms(self):
+  def test_legacy_done_state_never_arms(self) -> None:
     ext = self._ext()
     p = _MockParams({"FordAngleAutoCal": 1, "FordAngleAutoCalState": "done low=1.02 high=1.15"})
     ext.update_angle_params(p)
     assert ext.autocal_ctl.pipeline is None and ext.autocal_ctl.done and not ext.autocal_enabled
 
-  def test_garbage_state_starts_fresh(self):
+  def test_garbage_state_starts_fresh(self) -> None:
     ext = self._ext()
     p = _MockParams({"FordAngleAutoCal": 1, "FordAngleAutoCalState": "round 3 collecting; applied"})
     ext.update_angle_params(p)
     assert ext.autocal_ctl.pipeline is not None and ext.autocal_ctl.pipeline.est.n == 0
 
-  def test_nudge_writes_params_and_state(self):
+  def test_nudge_writes_params_and_state(self) -> None:
     ext = self._ext()
     p = _MockParams({"FordAngleAutoCal": 1, "FordAngleAutoCalState": "",
                      "FordLowSpeedFactor_ang": "1.00", "FordHighSpeedFactor_ang": "1.00"})
@@ -887,7 +899,7 @@ class TestOnboardGlue:
     assert ext.autocal_ctl.pipeline is not None
     assert ext.autocal_ctl.pipeline.est.n == n0  # user_edit() not triggered
 
-  def test_user_edit_adopted_single_tick(self):
+  def test_user_edit_adopted_single_tick(self) -> None:
     # Blocking nudge writes mean any param/last_written mismatch is a real driver edit —
     # detected and adopted on ONE tick, no async-lag debounce.
     ext = self._ext()
@@ -901,7 +913,7 @@ class TestOnboardGlue:
     assert abs(ext.autocal_ctl.pipeline.est.s_w - 0.5 * w0) < 1e-9  # soft reset, not a wipe
     assert ext.autocal_ctl._last_written == (1.08, 1.00)
 
-  def test_save_restore_round_trip_through_param(self):
+  def test_save_restore_round_trip_through_param(self) -> None:
     ext = self._ext()
     p = _MockParams({"FordAngleAutoCal": 1, "FordAngleAutoCalState": "",
                      "FordLowSpeedFactor_ang": "1.00", "FordHighSpeedFactor_ang": "1.00"})
@@ -915,7 +927,7 @@ class TestOnboardGlue:
     assert ext2.autocal_ctl.pipeline is not None
     assert ext2.autocal_ctl.pipeline.est.solve() == sol
 
-  def test_lock_off_resumes_a_locked_calibration(self):
+  def test_lock_off_resumes_a_locked_calibration(self) -> None:
     # A finished (locked) calibration + FordAngleAutoCalLock=0: the lock is treated as
     # "resume from this evidence" — the controller arms, restores, and un-locks.
     donor = AutoCalPipeline(PLATFORM_GAIN_HIGH)
@@ -936,7 +948,7 @@ class TestOnboardGlue:
     self._tick(ext, p, n=1)
     assert ctl.pipeline is not None and ctl.pipeline.lock_enabled and not ctl.pipeline.locked
 
-  def test_reset_param_erases_everything(self):
+  def test_reset_param_erases_everything(self) -> None:
     # The "erase calibration memory" button: evidence, error log, the LOCK, and the
     # factors themselves all go back to neutral — a finished calibration can be retried.
     ext = self._ext()
@@ -955,7 +967,7 @@ class TestOnboardGlue:
     assert ext.autocal_ctl._last_written == (1.0, 1.0)  # the wipe is not a "user edit"
     assert ext.low_speed_curv_factor == 1.0 and ext.high_speed_curv_factor == 1.0
 
-  def test_status_is_json_when_armed(self):
+  def test_status_is_json_when_armed(self) -> None:
     ext = self._ext()
     p = _MockParams({"FordAngleAutoCal": 1, "FordAngleAutoCalState": "",
                      "FordLowSpeedFactor_ang": "1.00", "FordHighSpeedFactor_ang": "1.00"})
@@ -964,7 +976,7 @@ class TestOnboardGlue:
     assert st["low"]["ph"] == "collect" and st["high"]["f"] == 1.0
     assert st["low"]["need"] == NUDGE_MIN_WEIGHT
 
-  def test_toggle_off_disarms(self):
+  def test_toggle_off_disarms(self) -> None:
     ext = self._ext()
     p = _MockParams({"FordAngleAutoCal": 1, "FordAngleAutoCalState": "",
                      "FordLowSpeedFactor_ang": "1.00", "FordHighSpeedFactor_ang": "1.00"})
@@ -973,3 +985,13 @@ class TestOnboardGlue:
     p.values["FordAngleAutoCal"] = 0
     self._tick(ext, p, n=1)
     assert ext.autocal_ctl.pipeline is None and not ext.autocal_enabled
+
+
+def test_retune_state_is_not_restored_or_locked() -> None:
+  from opendbc.sunnypilot.car.ford.angle_autocal_controller import _restore, _state_locked
+  pipe = AutoCalPipeline(PLATFORM_GAIN_HIGH)
+  old = {"v": 2, "phase": "locked", "pipe": {"est": {"n": 99}}}
+  state = json.dumps(old)
+  assert not _state_locked(state)
+  _restore(pipe, state)
+  assert pipe.est.n == 0

@@ -1,4 +1,5 @@
 [tools]
+uv = "0.12.4"
 node = "22.23.2"
 "npm:@intellectronica/ruler" = "0.3.44"
 
@@ -9,3 +10,69 @@ run = "ruler apply --local-only"
 [tasks."agents:preview"]
 description = "Preview generated agent rules and skills without writing"
 run = "ruler apply --local-only --dry-run"
+
+[tasks."device:check"]
+description = "Read device revision, local changes, process health and disk space"
+run = "python3 tools/device.py check"
+
+[tasks."device:build"]
+description = "Build current device tree offroad; never pull, reset or reboot"
+run = "python3 tools/device.py build"
+
+[tasks."device:logs"]
+description = "Read recent device logs (safe while onroad)"
+run = "python3 tools/device.py logs"
+
+[tasks."ui:screenshots"]
+description = "Compare host-rendered TICI/MICI component screenshots"
+env.BP_UI_SCREENSHOTS = "1"
+run = "uv run python -m pytest -q -o addopts='' selfdrive/ui/bp/tests/test_ui_screenshots.py"
+
+[tasks."ui:screenshots:update"]
+description = "Explicitly regenerate visual baselines; review every changed PNG"
+env.BP_UI_SCREENSHOTS = "1"
+env.BP_UI_UPDATE = "1"
+run = "uv run python -m pytest -q -o addopts='' selfdrive/ui/bp/tests/test_ui_screenshots.py"
+
+[tasks."tooling:setup"]
+description = "Install analysis/test dependencies and native messaging modules"
+run = """
+git submodule update --init --recursive
+uv sync --frozen --extra testing --extra dev
+mise run tooling:build
+"""
+
+[tasks."tooling:build"]
+description = "Build native modules required by log analysis and process replay"
+run = "uv run scons --minimal -j${BP_BUILD_JOBS:-4} common/params_pyx.so msgq_repo/msgq/ipc_pyx.so msgq_repo/msgq/visionipc/visionipc_pyx.so"
+
+[tasks."tooling:check"]
+description = "Check native imports and offline tooling"
+run = """
+uv run python -c 'import msgq.ipc_pyx, openpilot.common.params_pyx; from openpilot.selfdrive.test.process_replay.process_replay import get_process_config; print(get_process_config("card").proc_name)'
+uv run python -m pytest -q -o addopts='' tools/tests/test_device.py tools/tests/test_autocal_analysis.py opendbc_repo/opendbc/sunnypilot/car/ford/tests/test_replay_quality_limits.py bluepilot/selfdrive/car/tests/test_angle_route_telemetry.py
+"""
+
+[tasks."autocal:extract"]
+description = "Extract chronological rlogs into a portable scalar cache (--help for arguments)"
+run = "uv run python tools/autocal_analysis.py extract"
+
+[tasks."autocal:diagnose"]
+description = "Find oscillation episodes and clean response windows"
+run = "uv run --extra dev python tools/autocal_analysis.py diagnose"
+
+[tasks."autocal:confidence"]
+description = "Bootstrap whole evidence runs and compare held-out routes"
+run = "uv run python tools/autocal_validation.py confidence"
+
+[tasks."autocal:identify"]
+description = "Fit and validate a steering-response model on held-out routes"
+run = "uv run python tools/autocal_validation.py identify"
+
+[tasks."autocal:replay"]
+description = "Replay the native Ford card process offline (Linux devcontainer recommended)"
+run = "uv run --extra testing python tools/ford_process_replay.py"
+
+[tasks."autocal:simulate"]
+description = "Run diagnostic angle-strategy feedback simulation; never choose live settings"
+run = "uv run --extra testing python tools/autocal_simulate.py"

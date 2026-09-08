@@ -33,6 +33,8 @@ back in from zero through the soft ROC below (no jump seed) -- generous at human
 admitted by ford.h's path_angle ROC check (2% looser) without any bypass.
 """
 
+from typing import TYPE_CHECKING, Any
+
 import numpy as np
 from numpy import clip, interp
 
@@ -132,7 +134,7 @@ def pscm_d_ref_m(v_ego_ms: float) -> float:
 
 
 class LateralAngleExt:
-  def __init__(self, CP=None, CP_SP=None):
+  def __init__(self, CP: Any = None, CP_SP: Any = None) -> None:
     # Predicted-curvature blend for path_angle: pred * b + desired * (1-b); b from ``FordPathAngleBlendRatio``
     self.path_angle_blend_ratio = _FORD_PATH_ANGLE_BLEND_RATIO_DEFAULT
     # Max extra VLT above t_base; from ``FordVLTExtraMax`` param
@@ -205,7 +207,7 @@ class LateralAngleExt:
     return self.smoother.enabled
 
   @smoothing_enabled.setter
-  def smoothing_enabled(self, v: bool):
+  def smoothing_enabled(self, v: bool) -> None:
     self.smoother.enabled = bool(v)
 
   @property
@@ -213,10 +215,10 @@ class LateralAngleExt:
     return self.smoother.strength
 
   @smoothing_strength.setter
-  def smoothing_strength(self, v: float):
+  def smoothing_strength(self, v: float) -> None:
     self.smoother.strength = float(v)
 
-  def update_angle_params(self, params):
+  def update_angle_params(self, params: Any) -> None:
     """Sets per-platform gain defaults and reads user angle-tuning params."""
     self._ensure_lateral_curv_initialized(self.CP)
     fp = getattr(self.CP, 'carFingerprint', '')
@@ -276,6 +278,13 @@ class LateralAngleExt:
         self.autocal_ctl.poll_params(params, self.low_speed_curv_factor,
                                      self.high_speed_curv_factor,
                                      self.path_angle_gain_highC_highV)
+        self.autocal_ctl.record_settings(
+          low=self.low_speed_curv_factor, high=self.high_speed_curv_factor, dampening=self.user_dampening_factor,
+          smoothing_enabled=self.smoother.enabled, smoothing_strength=1.0 + self.smoother.strength,
+          smoothing_active=self.smoother.active, autocal_requested=self.autocal_ctl.requested_enabled,
+          lock_enabled=self.autocal_ctl.lock_enabled, lane_change_factor=self.lane_change_factor_high_ang,
+          lane_positioning=self.enable_lane_positioning_ang, path_offset=self.custom_path_offset_ang,
+          centering_strength=self.lane_centering_strength_ang)
 
   # -- auto-cal telemetry surface (bp_card_publisher reads these off the carcontroller) ----
   @property
@@ -286,7 +295,7 @@ class LateralAngleExt:
   def bp_autocal_status(self) -> str:
     return self.autocal_ctl.status
 
-  def _feed_autocal(self, CS, kappa_cmd: float, kappa_meas: float):
+  def _feed_autocal(self, CS: Any, kappa_cmd: float, kappa_meas: float) -> None:
     """Build one evidence Frame from the car signals + this frame's limiter flags and hand
     it to the controller. Frame construction (and its signal reads) happens only while the
     calibrator is armed — for everyone else this is one attribute check per frame."""
@@ -306,7 +315,7 @@ class LateralAngleExt:
             lateral_delay=float(self.sm['liveDelay'].lateralDelay)),
       delay_estimated=str(self.sm['liveDelay'].status) == "estimated")
 
-  def _reset_angle_signals(self, CS):
+  def _reset_angle_signals(self, CS: Any) -> None:
     """Clear wire/telemetry state and the calibration + smoothing filters. Shared by the
     three branches that drop lateral to mode 0 (inactive, human-turn, stall-blip)."""
     self.path_angle_last = 0.0
@@ -330,7 +339,7 @@ class LateralAngleExt:
     return LateralResult(apply_curvature=0.0, curvature_rate=0.0, path_offset=0.0,
                          path_angle=0.0, ramp_type=0, precision_type=1, lateralUncertainty=0.0)
 
-  def update_angle_strategy(self, CC, CS, actuators, CP):
+  def update_angle_strategy(self, CC: Any, CS: Any, actuators: Any, CP: Any) -> LateralResult:
     """
     Curvature from planner (+ optional predicted blend, + lane centering trim) → path_angle via
     ½·κ·d_ref. c0 (path_offset) is always zero on the wire; the lane centering trim lives entirely
@@ -700,3 +709,15 @@ class LateralAngleExt:
       precision_type=self.precision_type,
       lateralUncertainty=lateral_uncertainty,
     )
+  if TYPE_CHECKING:
+    # CarController composes this extension with LateralCurvExt at runtime.
+    # These members are supplied by that sibling mixin, not by this class.
+    CP: Any
+    sm: Any
+    model: Any
+    lane_change_factor_bp: list[float]
+    lane_change_factor_low: float
+    bp_curvature_error: float
+
+    def _ensure_lateral_curv_initialized(self, CP: Any) -> None: ...
+    def get_current_curvature(self, CS: Any) -> float: ...

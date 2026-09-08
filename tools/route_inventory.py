@@ -6,6 +6,8 @@ valid carState samples in m/s bands. Optional Ford scores count rough candidate
 carControl samples, not seconds or accepted calibration evidence. Qlog sampling can
 miss brief driver inputs; shortlisted segments must be rechecked with full rlogs.
 """
+from typing import Any
+from collections.abc import Iterable, Iterator
 import argparse
 from collections import Counter
 from datetime import date, datetime
@@ -16,7 +18,7 @@ import sys
 from zoneinfo import ZoneInfo
 
 
-def segment_logs(root):
+def segment_logs(root: str | Path) -> Iterator[Path]:
   from openpilot.tools.lib.route import FileName
   for directory in sorted(Path(root).iterdir()):
     if not directory.is_dir() or not directory.name.rsplit('--', 1)[-1].isdigit():
@@ -26,10 +28,11 @@ def segment_logs(root):
       yield path
 
 
-def summarize(events, timezone, day=None, ford_autocal=False):
-  counts = Counter()
+def summarize(events: Iterable[Any], timezone: ZoneInfo, day: date | None = None, ford_autocal: bool = False) -> dict[str, Any] | None:
+  counts: Counter[str] = Counter()
   cs = None
-  cs_time = grip_until = None
+  cs_time: int | None = None
+  grip_until: int | None = None
   first = last = local_start = None
   min_speed, max_speed = math.inf, -math.inf
   if ford_autocal:
@@ -91,7 +94,7 @@ def summarize(events, timezone, day=None, ford_autocal=False):
           'max_speed_mps': round(max_speed, 2) if math.isfinite(max_speed) else None, **counts}
 
 
-def main():
+def main() -> int:
   parser = argparse.ArgumentParser(description=__doc__)
   parser.add_argument('root', type=Path, help='Local directory containing route--segment folders')
   parser.add_argument('--date', type=date.fromisoformat, help='Segment-start date, YYYY-MM-DD, in --timezone')

@@ -6,6 +6,8 @@ See the LICENSE.md file in the root directory for more details.
 """
 
 # Unit tests for angle-mode shadow-curvature publishing (bp_kappa_cmd).
+# The harness mirrors dynamically composed Cereal controller state.
+# mypy: disable-error-code=no-untyped-def
 #
 # The shadow value is consumed by carcontroller as the input to ford.h's angle-mode
 # deviation check (Lane_Assist_Data1 bytes 5-6, judged against angle_meas). These tests
@@ -18,6 +20,7 @@ See the LICENSE.md file in the root directory for more details.
 import math
 import unittest
 from dataclasses import dataclass
+from typing import Any
 from unittest import mock
 
 from opendbc.car import structs
@@ -65,7 +68,7 @@ class _ForcedDetector:
   def update(self, *_args):
     return self.active
 
-  def reset(self):
+  def reset(self) -> None:
     pass
 
 
@@ -151,6 +154,8 @@ class _Actuators:
 
 class _Harness(LateralCurvExt, LateralAngleExt):
   """Mirrors CarController's mixin composition (see carcontroller.py)."""
+  human_turn_detector: Any  # Tests deliberately replace the production detector with a forced stub.
+  model: Any
 
   def __init__(self, CP, CP_SP=None):
     self.CP = CP  # CarControllerBase initializes this before the lateral mixins.
@@ -174,7 +179,7 @@ class TestShadowCurvaturePublishing(unittest.TestCase):
   V_EGO = 15.0
   YAW_RATE = 0.75  # rad/s -> measured curvature = -0.75 / 15 = -0.05 (OP convention)
 
-  def setUp(self):
+  def setUp(self) -> None:
     self.CP = _explorer_cp()
     self.ext = _Harness(self.CP)
     self.ext.human_turn_detector = _ForcedDetector(False)
@@ -184,32 +189,32 @@ class TestShadowCurvaturePublishing(unittest.TestCase):
   def _update(self, lat_active=True):
     return self.ext.update_angle_strategy(_CC(latActive=lat_active), self.cs, _Actuators(curvature=0.01), self.CP)
 
-  def test_inactive_publishes_measured(self):
+  def test_inactive_publishes_measured(self) -> None:
     result = self._update(lat_active=False)
     self.assertEqual(result.path_angle, 0.0)
     self.assertAlmostEqual(self.ext.bp_kappa_cmd, self.measured)
 
-  def test_human_turn_override_publishes_measured(self):
+  def test_human_turn_override_publishes_measured(self) -> None:
     self.ext.human_turn_detector = _ForcedDetector(True)
     result = self._update()
     self.assertTrue(self.ext.angle_human_turn_active)
     self.assertEqual(result.path_angle, 0.0)
     self.assertAlmostEqual(self.ext.bp_kappa_cmd, self.measured)
 
-  def test_stall_blip_publishes_measured(self):
+  def test_stall_blip_publishes_measured(self) -> None:
     self.ext.stall_blip_frames_left = 3
     result = self._update()
     self.assertTrue(self.ext.angle_stall_blip_active)
     self.assertEqual(result.path_angle, 0.0)
     self.assertAlmostEqual(self.ext.bp_kappa_cmd, self.measured)
 
-  def test_pressed_publishes_measured(self):
+  def test_pressed_publishes_measured(self) -> None:
     self.cs.out.steeringPressed = True
     self._update()
     self.assertFalse(self.ext.angle_human_turn_active)
     self.assertAlmostEqual(self.ext.bp_kappa_cmd, self.measured)
 
-  def test_hands_off_publishes_clipped_planner_kappa(self):
+  def test_hands_off_publishes_clipped_planner_kappa(self) -> None:
     # planner wants +0.01 while measured is -0.05: the deviation clip (active above 9 m/s)
     # bounds the shadow to measured + CURVATURE_ERROR, not measured itself -- hands-off
     # behavior is unchanged by the truthful-shadow sites.
@@ -228,13 +233,13 @@ class TestMeasurementSelection(unittest.TestCase):
 
   V_EGO = 15.0
 
-  def test_default_is_yaw_rate(self):
+  def test_default_is_yaw_rate(self) -> None:
     ext, _ = _pinion_harness(flag=False)
     cs = _CS(vEgoRaw=self.V_EGO, yawRate=0.75, steeringAngleDeg=30.0)
     self.assertFalse(ext.bp_pinion_curvature_enabled)
     self.assertAlmostEqual(ext.get_current_curvature(cs), -0.75 / self.V_EGO)
 
-  def test_flag_selects_pinion_vehicle_model(self):
+  def test_flag_selects_pinion_vehicle_model(self) -> None:
     from opendbc.car.vehicle_model import VehicleModel
     ext, CP = _pinion_harness(flag=True)
     cs = _CS(vEgoRaw=self.V_EGO, yawRate=0.75, steeringAngleDeg=30.0)
@@ -245,10 +250,10 @@ class TestMeasurementSelection(unittest.TestCase):
 
 
 class TestAngleParams(unittest.TestCase):
-  def setUp(self):
+  def setUp(self) -> None:
     self.ext = _Harness(_explorer_cp())
 
-  def test_high_speed_dampening_preserves_platform_gain(self):
+  def test_high_speed_dampening_preserves_platform_gain(self) -> None:
     CP = _explorer_cp()
     CP.carFingerprint = CAR.FORD_F_150_MK14
     ext = _Harness(CP)
@@ -256,7 +261,7 @@ class TestAngleParams(unittest.TestCase):
     self.assertAlmostEqual(ext.path_angle_gain_lowC_highV, 0.95)
     self.assertAlmostEqual(ext.user_dampening_factor, 1.12)
 
-  def test_high_speed_dampening_multiplies_low_curvature_high_speed_gain(self):
+  def test_high_speed_dampening_multiplies_low_curvature_high_speed_gain(self) -> None:
     self.ext.update_angle_params(_FakeParams({"FordHighSpeedDampening_ang": b"1.12"}))
     cs = _CS(vEgoRaw=26.82, vEgo=26.82)
     self.ext.update_angle_strategy(_CC(), cs, _Actuators(), self.ext.CP)
@@ -265,7 +270,7 @@ class TestAngleParams(unittest.TestCase):
       self.ext.path_angle_gain_lowC_highV * self.ext.user_dampening_factor,
     )
 
-  def test_high_speed_dampening_is_clamped(self):
+  def test_high_speed_dampening_is_clamped(self) -> None:
     for raw_value, expected in ((b"0.10", 0.25), (b"0.50", 0.50), (b"1.50", 1.25)):
       with self.subTest(raw_value=raw_value):
         self.ext.update_angle_params(_FakeParams({"FordHighSpeedDampening_ang": raw_value}))
@@ -275,16 +280,16 @@ class TestAngleParams(unittest.TestCase):
 class TestTakeoverAndDeviationBudget(unittest.TestCase):
   """BluePilot: PR #194 remains effective alongside autocal and smoothing."""
 
-  def setUp(self):
+  def setUp(self) -> None:
     self.CP = _explorer_cp()
     self.ext = _Harness(self.CP)
     self.ext.human_turn_detector = _ForcedDetector(False)
     self.cs = _CS()
 
-  def update(self, curvature=0.0, active=True):
+  def update(self, curvature: float = 0.0, active: bool = True) -> Any:
     return self.ext.update_angle_strategy(_CC(active), self.cs, _Actuators(curvature), self.CP)
 
-  def test_release_chatter_does_not_trigger_handoff(self):
+  def test_release_chatter_does_not_trigger_handoff(self) -> None:
     self.cs.out.steeringPressed = True
     for _ in range(20):
       self.update()
@@ -298,7 +303,7 @@ class TestTakeoverAndDeviationBudget(unittest.TestCase):
       self.update()
     self.assertTrue(self.ext.angle_stall_blip_active)
 
-  def test_inactive_and_human_turn_clear_release_state(self):
+  def test_inactive_and_human_turn_clear_release_state(self) -> None:
     for human_turn in (False, True):
       with self.subTest(human_turn=human_turn):
         self.ext.press_timer_s = 1.0
@@ -308,13 +313,13 @@ class TestTakeoverAndDeviationBudget(unittest.TestCase):
         self.assertEqual(self.ext.press_timer_s, 0.0)
         self.assertEqual(self.ext.release_timer_s, 0.0)
 
-  def test_curve_entry_from_straight_does_not_trigger_stall(self):
+  def test_curve_entry_from_straight_does_not_trigger_stall(self) -> None:
     for _ in range(80):
       self.update(curvature=0.02)
       self.assertFalse(self.ext.angle_stall_blip_active)
     self.assertEqual(self.ext.stall_blip_count, 0)
 
-  def test_trim_cannot_consume_planner_budget_in_either_direction(self):
+  def test_trim_cannot_consume_planner_budget_in_either_direction(self) -> None:
     self.ext.path_angle_blend_ratio = 0.0
     for sign in (-1, 1):
       with self.subTest(sign=sign):
@@ -323,7 +328,7 @@ class TestTakeoverAndDeviationBudget(unittest.TestCase):
           self.update(curvature=planner)
         self.assertAlmostEqual(self.ext.bp_kappa_cmd, sign * self.ext.bp_curvature_error)
 
-  def test_pinion_band_is_used_by_angle_strategy(self):
+  def test_pinion_band_is_used_by_angle_strategy(self) -> None:
     for pinion, band in ((False, CarControllerParams.CURVATURE_ERROR), (True, 0.003)):
       ext, cp = _pinion_harness(pinion)
       ext.path_angle_blend_ratio = 0.0
@@ -333,7 +338,7 @@ class TestTakeoverAndDeviationBudget(unittest.TestCase):
 
 
 class TestInitializeFord(unittest.TestCase):
-  def test_safety_param_stays_a_plain_int(self):
+  def test_safety_param_stays_a_plain_int(self) -> None:
     """card serializes CP_SP to capnp, which rejects enum subclasses of int -- an
     IntFlag-typed safetyParam crashed card on-device. Pin the exact type."""
     from opendbc.sunnypilot.car.interfaces import _initialize_ford
@@ -341,7 +346,8 @@ class TestInitializeFord(unittest.TestCase):
     CP.brand = 'ford'
     CP.carFingerprint = 'FORD_EXPLORER_MK6'
     CP_SP = structs.CarParamsSP()
-    _initialize_ford(CP, CP_SP, {"FordPrefSteerAngleCurvature": True})
+    ford_params: Any = {"FordPrefSteerAngleCurvature": True}
+    _initialize_ford(CP, CP_SP, ford_params)
     self.assertEqual(CP_SP.safetyParam, 0xb)  # flag | (explorer index 5 << 1)
     self.assertIs(type(CP_SP.safetyParam), int)
 
@@ -352,7 +358,7 @@ class TestLaneCenteringIntegration(unittest.TestCase):
 
   V_EGO = 15.0
 
-  def setUp(self):
+  def setUp(self) -> None:
     self.CP = _explorer_cp()
     self.ext = _Harness(self.CP)
     self.ext.human_turn_detector = _ForcedDetector(False)
@@ -362,12 +368,12 @@ class TestLaneCenteringIntegration(unittest.TestCase):
   def _update(self, lat_active=True):
     return self.ext.update_angle_strategy(_CC(latActive=lat_active), self.cs, _Actuators(curvature=0.0), self.CP)
 
-  def test_disabled_by_default(self):
+  def test_disabled_by_default(self) -> None:
     for _ in range(50):
       self._update()
     self.assertEqual(self.ext.lane_center_trim.correction, 0.0)
 
-  def test_enabling_with_offset_produces_correction(self):
+  def test_enabling_with_offset_produces_correction(self) -> None:
     self.ext.enable_lane_positioning_ang = True
     self.ext.custom_path_offset_ang = 5.0
     self.ext.lane_centering_strength_ang = 1.0
@@ -375,7 +381,7 @@ class TestLaneCenteringIntegration(unittest.TestCase):
       self._update()
     self.assertNotEqual(self.ext.lane_center_trim.correction, 0.0)
 
-  def test_strength_param_scales_correction(self):
+  def test_strength_param_scales_correction(self) -> None:
     self.ext.enable_lane_positioning_ang = True
     self.ext.custom_path_offset_ang = 5.0
     self.ext.lane_centering_strength_ang = 1.0
@@ -391,7 +397,7 @@ class TestLaneCenteringIntegration(unittest.TestCase):
 
     self.assertAlmostEqual(half_gain_correction, full_gain_correction * 0.5, places=3)
 
-  def test_lane_change_resets_correction(self):
+  def test_lane_change_resets_correction(self) -> None:
     self.ext.enable_lane_positioning_ang = True
     self.ext.custom_path_offset_ang = 5.0
     self.ext.lane_centering_strength_ang = 1.0
@@ -399,11 +405,12 @@ class TestLaneCenteringIntegration(unittest.TestCase):
       self._update()
     self.assertNotEqual(self.ext.lane_center_trim.correction, 0.0)
 
+    assert self.ext.model is not None
     self.ext.model.meta.laneChangeState = 1  # laneChangeStarting
     self._update()
     self.assertEqual(self.ext.lane_center_trim.correction, 0.0)
 
-  def test_human_turn_resets_correction(self):
+  def test_human_turn_resets_correction(self) -> None:
     self.ext.enable_lane_positioning_ang = True
     self.ext.custom_path_offset_ang = 5.0
     self.ext.lane_centering_strength_ang = 1.0
@@ -416,7 +423,7 @@ class TestLaneCenteringIntegration(unittest.TestCase):
     self.assertTrue(self.ext.angle_human_turn_active)
     self.assertEqual(self.ext.lane_center_trim.correction, 0.0)
 
-  def test_inactive_resets_correction(self):
+  def test_inactive_resets_correction(self) -> None:
     self.ext.enable_lane_positioning_ang = True
     self.ext.custom_path_offset_ang = 5.0
     self.ext.lane_centering_strength_ang = 1.0
@@ -428,31 +435,31 @@ class TestLaneCenteringIntegration(unittest.TestCase):
     self.assertEqual(self.ext.lane_center_trim.correction, 0.0)
 class _SmModel:
   """Minimal modelV2 stand-in: constant curvature along the horizon."""
-  class _OR:
-    def __init__(self, z):
+  class _OR:  # noqa: B903 - test double needs mutable Cereal-shaped nested fields.
+    def __init__(self, z: list[float]) -> None:
       self.z = z
 
   class _Meta:
     laneChangeState = 0
     laneChangeDirection = 0
 
-  def __init__(self, kappa, v):
+  def __init__(self, kappa: float, v: float) -> None:
     self.orientationRate = self._OR([kappa * v] * 33)
     self.meta = self._Meta()
 
 
 class _SmParams:
   """Typed-enough mock params for the smoothing toggle glue."""
-  def __init__(self, values):
+  def __init__(self, values: dict[str, Any]) -> None:
     self.values = values
 
-  def get(self, key, return_default=False):
+  def get(self, key: str, return_default: bool = False) -> Any:
     return self.values.get(key)
 
-  def get_bool(self, key):
+  def get_bool(self, key: str) -> bool:
     return bool(self.values.get(key))
 
-  def put(self, key, value):
+  def put(self, key: str, value: Any) -> None:
     self.values[key] = value
 
 
@@ -462,7 +469,7 @@ class TestAngleSmoothing(unittest.TestCase):
 
   V = 20.0
 
-  def _ext(self, smoothing):
+  def _ext(self, smoothing: bool) -> _Harness:
     cp = _explorer_cp()
     ext = _Harness(cp)
     ext.CP = cp  # update_angle_params reads self.CP (set by carcontroller in the real stack)
@@ -472,11 +479,11 @@ class TestAngleSmoothing(unittest.TestCase):
     ext.smoothing_strength = 1.0 if smoothing else 0.0
     return ext
 
-  def _cs(self, desired=0.0):
+  def _cs(self, desired: float = 0.0) -> _CS:
     # yaw tracks desired so the deviation clip never binds and measured == desired.
     return _CS(vEgoRaw=self.V, vEgo=self.V, yawRate=-desired * self.V)
 
-  def _drive(self, ext, desired_seq, model_kappa=None):
+  def _drive(self, ext: _Harness, desired_seq: list[float], model_kappa: float | None = None) -> list[float]:
     out = []
     for d in desired_seq:
       if model_kappa is not None:
@@ -484,7 +491,7 @@ class TestAngleSmoothing(unittest.TestCase):
       out.append(ext.update_angle_strategy(_CC(), self._cs(d), _Actuators(curvature=d), _explorer_cp()).path_angle)
     return out
 
-  def test_off_gain_schedule_uses_raw_kappa(self):
+  def test_off_gain_schedule_uses_raw_kappa(self) -> None:
     from numpy import interp as np_interp
     ext = self._ext(False)
     for d in [0.0006, 0.0011, 0.0006, 0.0011] * 10:
@@ -496,7 +503,7 @@ class TestAngleSmoothing(unittest.TestCase):
     self.assertEqual(ext.smoother._sched, 0.0)
     self.assertIsNone(ext.smoother._b_blend)
 
-  def test_on_gain_schedule_filters_oscillation(self):
+  def test_on_gain_schedule_filters_oscillation(self) -> None:
     ext = self._ext(True)
     factors = []
     for d in [0.0006, 0.0011] * 40:  # square wave straddling the interp band
@@ -507,7 +514,7 @@ class TestAngleSmoothing(unittest.TestCase):
     # the filtered schedule input must pin it nearly constant once settled.
     self.assertLess(max(tail) - min(tail), 0.05)
 
-  def test_gain_filter_asymmetry(self):
+  def test_gain_filter_asymmetry(self) -> None:
     from opendbc.sunnypilot.car.ford.angle_smoothing import GAIN_RC_UP as _SM_GAIN_RC_UP, GAIN_RC_DOWN as _SM_GAIN_RC_DOWN
     ext = self._ext(True)
     rise_frames = int(2.3 * _SM_GAIN_RC_UP / 0.05) + 2
@@ -517,7 +524,7 @@ class TestAngleSmoothing(unittest.TestCase):
     self._drive(ext, [0.0] * fall_frames, model_kappa=0.0)
     self.assertGreater(ext.smoother._sched, 0.3 * 0.002)
 
-  def test_wire_hold_stops_sub_lsb_dither(self):
+  def test_wire_hold_stops_sub_lsb_dither(self) -> None:
     from opendbc.sunnypilot.car.ford.angle_smoothing import WIRE_HOLD as _SM_WIRE_HOLD
     ext = self._ext(True)
     self._drive(ext, [0.0015] * 60)  # settle onto a working point
@@ -528,7 +535,7 @@ class TestAngleSmoothing(unittest.TestCase):
     out = self._drive(ext, [0.0030] * 30)  # a genuine move releases the hold
     self.assertNotAlmostEqual(out[-1], held, places=6)
 
-  def test_blend_slew_bounded(self):
+  def test_blend_slew_bounded(self) -> None:
     from opendbc.sunnypilot.car.ford.angle_smoothing import BLEND_SLEW as _SM_BLEND_SLEW
     ext = self._ext(True)
     ext.model = _SmModel(0.002, self.V)
@@ -539,7 +546,7 @@ class TestAngleSmoothing(unittest.TestCase):
         self.assertLessEqual(abs(ext.smoother._b_blend - prev), _SM_BLEND_SLEW + 1e-9)
       prev = ext.smoother._b_blend
 
-  def test_kappa_entering_hysteresis(self):
+  def test_kappa_entering_hysteresis(self) -> None:
     ext = self._ext(True)
     flips = 0
     last = None
@@ -552,7 +559,7 @@ class TestAngleSmoothing(unittest.TestCase):
       last = ext.smoother._entering
     self.assertEqual(flips, 0)
 
-  def test_curve_entry_not_softened(self):
+  def test_curve_entry_not_softened(self) -> None:
     ramp = [min(0.003, 0.0002 * i) for i in range(60)]
     off = self._drive(self._ext(False), ramp)
     on = self._drive(self._ext(True), ramp)
@@ -562,7 +569,7 @@ class TestAngleSmoothing(unittest.TestCase):
     self.assertLessEqual(t_on - t_off, 2)  # <=0.1 s later at 20 Hz
     self.assertAlmostEqual(on[-1], off[-1], delta=abs(off[-1]) * 0.02 + 1e-9)
 
-  def test_roc_property_holds_with_smoothing(self):
+  def test_roc_property_holds_with_smoothing(self) -> None:
     import random
     rng = random.Random(3)
     ext = self._ext(True)
@@ -573,7 +580,7 @@ class TestAngleSmoothing(unittest.TestCase):
       self.assertLessEqual(abs(ext.path_angle_last - prev), 0.055 + 1e-9)  # loosest soft ROC
       prev = ext.path_angle_last
 
-  def test_resets_on_override_paths(self):
+  def test_resets_on_override_paths(self) -> None:
     ext = self._ext(True)
     self._drive(ext, [0.002] * 40)
     self.assertGreater(ext.smoother._sched, 0.0)
@@ -583,7 +590,7 @@ class TestAngleSmoothing(unittest.TestCase):
     self.assertEqual(ext.smoother._wire, 0.0)
     self.assertIsNone(ext.smoother._b_blend)
 
-  def test_menu_one_is_bit_identical_stock(self):
+  def test_menu_one_is_bit_identical_stock(self) -> None:
     # Menu 1.0 (effective 0) must equal the toggle-off path EXACTLY, frame by frame.
     import random
     rng = random.Random(7)
@@ -594,7 +601,7 @@ class TestAngleSmoothing(unittest.TestCase):
     on = self._drive(neutral, seq)
     self.assertEqual(off, on)
 
-  def test_strength_max_entry_still_fast(self):
+  def test_strength_max_entry_still_fast(self) -> None:
     ramp = [min(0.003, 0.0002 * i) for i in range(60)]
     off = self._drive(self._ext(False), ramp)
     strong = self._ext(True)
@@ -605,7 +612,7 @@ class TestAngleSmoothing(unittest.TestCase):
     t_on = next(i for i, x in enumerate(on) if x >= target)
     self.assertLessEqual(t_on - t_off, 2)  # entry guarantee is strength-independent
 
-  def test_param_glue_reads_strength(self):
+  def test_param_glue_reads_strength(self) -> None:
     ext = self._ext(True)
     p = _SmParams({"FordAngleSmoothing": True, "FordAngleSmoothStrength": 1.5,
                    "FordAngleAutoCal": 0, "FordAngleAutoCalState": ""})
@@ -621,7 +628,7 @@ class TestAngleSmoothing(unittest.TestCase):
       ext.update_angle_params(p)
     self.assertAlmostEqual(ext.smoothing_strength, 0.0)
 
-  def test_param_glue_reads_toggle(self):
+  def test_param_glue_reads_toggle(self) -> None:
     ext = self._ext(True)
     p = _SmParams({"FordAngleSmoothing": False, "FordAngleAutoCal": 0, "FordAngleAutoCalState": ""})
     for _ in range(101):

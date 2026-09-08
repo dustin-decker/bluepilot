@@ -167,6 +167,22 @@ def publish_controller_state_bp(CI, pm):
     if status:
       cs_bp.bmsAngleAutoCalState = str(status)
 
+    # Runtime values override the older five-second menu snapshot for route reconstruction.
+    ctl = getattr(cc, "autocal_ctl", None)
+    smoother = getattr(cc, "smoother", None)
+    if ctl is not None and smoother is not None:
+      cs_bp.angleTuningValid = ctl.settings_seen
+      cs_bp.bmsLowSpeedAdjustmentFactor = cc.low_speed_curv_factor
+      cs_bp.bmsHighSpeedAdjustmentFactor = cc.high_speed_curv_factor
+      cs_bp.bmsLaneChangeFactorHighAngle = cc.lane_change_factor_high_ang
+      cs_bp.bmsHighSpeedDampeningAngle = cc.user_dampening_factor
+      cs_bp.bmsAngleSmoothing = smoother.enabled
+      cs_bp.bmsAngleSmoothStrength = 1.0 + smoother.strength
+      cs_bp.angleSmoothingActive = smoother.active
+      cs_bp.bmsAngleAutoCalLock = ctl.lock_enabled
+      cs_bp.angleAutoCalRequested = ctl.requested_enabled
+      cs_bp.angleAutoCalEvents = ctl.events_for_log()
+
     # BluePilot: fingerprint info -- plain attribute reads on CarParams, no Params round-trip
     # needed, so no caching required (fingerprint never changes after startup).
     CP = getattr(CI, "CP", None)

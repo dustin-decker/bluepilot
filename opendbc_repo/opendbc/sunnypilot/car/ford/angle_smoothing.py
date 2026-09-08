@@ -50,13 +50,13 @@ class AngleSmoother:
   is inactive — so toggling or stepping strength mid-drive can never produce a
   transient from stale state."""
 
-  def __init__(self, dt: float = _STEER_DT):
+  def __init__(self, dt: float = _STEER_DT) -> None:
     self.dt = dt
     self.enabled = True       # master toggle (param re-read ~1 Hz by the owner)
     self.strength = 0.0       # EFFECTIVE scale (menu - 1.0); 0 = stock passthrough
     self.reset()
 
-  def configure(self, enabled: bool, menu_value: float):
+  def configure(self, enabled: bool, menu_value: float) -> None:
     """From the params poll: menu value is clamped to [MENU_MIN, MENU_MAX]."""
     self.enabled = bool(enabled)
     menu = min(MENU_MAX, max(MENU_MIN, float(menu_value)))
@@ -66,14 +66,14 @@ class AngleSmoother:
   def active(self) -> bool:
     return self.enabled and self.strength > 1e-6
 
-  def reset(self):
+  def reset(self) -> None:
     """Command-path discontinuity (disengage / human turn / stall blip): every filter
     re-seeds on its next active frame instead of averaging across the gap."""
     self._sched = 0.0
     self._sched_init = False
     self._pred = 0.0
     self._pred_init = False
-    self._b_blend = None
+    self._b_blend: float | None = None
     self._entering = False
     self._wire = 0.0
 

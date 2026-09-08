@@ -1,0 +1,19 @@
+{
+  "name": "BluePilot analysis tooling",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": "."
+  },
+  "remoteUser": "developer",
+  "postCreateCommand": "mise trust && mise run tooling:setup",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "/opt/venv/bin/python"
+      }
+    }
+  }
+}

@@ -567,9 +567,18 @@ struct ControllerStateBP @0xcd96dafb67a082d0 {
     angle @2;
   }
 
-  bmsAngleAutoCalibrate @55 :Bool;  # FordAngleAutoCal toggle state
+  bmsAngleAutoCalibrate @55 :Bool;  # runtime AutoCal enabled (requested toggle is logged separately)
   bmsAngleAutoCalState @56 :Text;  # live controller status (bp_autocal_status): "off"/"locked"/"reset" or armed JSON
   angleSaturated @57 :Bool;  # angle mode: PSCM authority limit or DBC clamp modified this frame's command
+  # BluePilot: effective angle settings, read from the controller each publish (not cached Params).
+  angleTuningValid @58 :Bool;  # false in older logs / controllers without runtime telemetry
+  bmsAngleSmoothing @59 :Bool;
+  bmsAngleSmoothStrength @60 :Float32;  # menu units: 1.0 = passthrough
+  angleSmoothingActive @61 :Bool;  # toggle AND nonneutral strength
+  bmsHighSpeedDampeningAngle @62 :Float32;
+  bmsAngleAutoCalLock @63 :Bool;  # requested lock behavior, distinct from currently locked
+  angleAutoCalRequested @64 :Bool;  # requested enable, distinct from live bmsAngleAutoCalibrate
+  angleAutoCalEvents @65 :Text;  # v1 JSON: bounded recent events with sequence and monotonic timestamp
 }
 
 struct CarStateBP @0xb057204d7deadf3f {

@@ -32,7 +32,12 @@ The estimator is pure math with no I/O so the exact same code runs in two places
 """
 import math
 from dataclasses import dataclass
-from typing import NamedTuple
+from typing import Any, NamedTuple
+
+Stats = dict[str, float | int]
+Sample = tuple[float, float, float]
+PeakSample = tuple[float, float, float, float]
+Verify = dict[str, float | None]
 
 # The strategy owns the gain model; this module (and the offline analyzer) consume it.
 from opendbc.sunnypilot.car.ford.values_ext import V_LOW, V_HIGH, LOW_ANCHOR_BASE
@@ -244,7 +249,7 @@ class AngleFactorEstimator:
   O(1) state — and that state serializes to a dict for cross-drive persistence.
   """
 
-  def __init__(self, platform_gain_high: float):
+  def __init__(self, platform_gain_high: float) -> None:
     self.platform_gain_high = float(platform_gain_high)
     # Normal-equation accumulators for min sum w*((1-a)A + aB - y)^2
     self.s_ll = 0.0  # sum w*(1-a)^2
@@ -257,11 +262,11 @@ class AngleFactorEstimator:
     self.n = 0
     # Left/right split per anchor half for bank-bias detection: {(half, dir): [w, wy]}
     # half: 0 = alpha < 0.5 (low anchor side), 1 = high side; dir: 0 = left, 1 = right.
-    self.lr = {(h, d): [0.0, 0.0] for h in (0, 1) for d in (0, 1)}
+    self.lr: dict[tuple[int, int], list[float]] = {(h, d): [0.0, 0.0] for h in (0, 1) for d in (0, 1)}
     # Fast-forgetting per-anchor response ratio r = meas/cmd (TAU_RECENT_S): "what is the
     # car doing RIGHT NOW under the current factors" — the adjust-then-verify check and
     # the live dashboard read this, the long-memory fit above never does.
-    self.recent = {0: [0.0, 0.0], 1: [0.0, 0.0]}  # half -> [w, sum w*r]
+    self.recent: dict[int, list[float]] = {0: [0.0, 0.0], 1: [0.0, 0.0]}  # half -> [w, sum w*r]
 
   def add_sample(self, v_ego: float, kappa_cmd: float, kappa_meas: float,
                  applied_gain: float, weight: float = 1.0) -> bool:
@@ -301,7 +306,7 @@ class AngleFactorEstimator:
     rec[1] += w * r
     return True
 
-  def decay(self, seconds: float):
+  def decay(self, seconds: float) -> None:
     """Exponential evidence forgetting: old drives fade so adaptation stays possible,
     while the ~TAU saturation keeps lock thresholds reachable and stable. The recent
     tracker forgets much faster (TAU_RECENT_S) — it must answer for the car as it is
@@ -313,7 +318,7 @@ class AngleFactorEstimator:
       rec[0] *= fr
       rec[1] *= fr
 
-  def scale(self, f: float):
+  def scale(self, f: float) -> None:
     self.s_ll *= f
     self.s_lh *= f
     self.s_hh *= f
@@ -328,7 +333,7 @@ class AngleFactorEstimator:
       rec[0] *= f
       rec[1] *= f
 
-  def recent_response(self, half: int):
+  def recent_response(self, half: int) -> tuple[float, float | None]:
     """(weight, mean ratio) of the fast tracker for one anchor half; ratio is None until
     any evidence exists. Ratio 0.93 reads as 'turns 93% of requested'."""
     w, s = self.recent[half]
@@ -355,7 +360,7 @@ class AngleFactorEstimator:
       return 0.0
     return abs(yl / wl - yr / wr)
 
-  def solve(self):
+  def solve(self) -> tuple[float, float, Stats] | None:
     """Solve for the ideal anchors. Returns (low_factor, high_factor, stats) or None.
 
     low_factor / high_factor are the values to store in FordLowSpeedFactor_ang /
@@ -400,7 +405,7 @@ class AngleFactorEstimator:
     }
     return low_factor, high_factor, stats
 
-  def to_dict(self) -> dict:
+  def to_dict(self) -> dict[str, object]:
     return {
       "s_ll": self.s_ll, "s_lh": self.s_lh, "s_hh": self.s_hh,
       "s_ly": self.s_ly, "s_hy": self.s_hy, "s_w": self.s_w, "s_wy2": self.s_wy2,
@@ -409,7 +414,7 @@ class AngleFactorEstimator:
       "recent": [self.recent[0][:], self.recent[1][:]],
     }
 
-  def from_dict(self, d: dict):
+  def from_dict(self, d: dict[str, Any]) -> None:
     self.s_ll = float(d["s_ll"])
     self.s_lh = float(d["s_lh"])
     self.s_hh = float(d["s_hh"])
@@ -434,14 +439,14 @@ class QualityMonitor:
   sit above what clean cornering produces, blanking windows are short, and the rough-road
   residual is high-passed so slow curve content cannot trip it."""
 
-  def __init__(self, dt: float = 0.05):
+  def __init__(self, dt: float = 0.05) -> None:
     self.dt = dt
     self.blank_s = 0.0
     self.flick_fired = False       # True only on the frame a disturbance was detected
-    self._meas_last = None
-    self._cmd_last = None
-    self._ws_spread_last = None
-    self._lp = None                # low-passed measurement ("curve content")
+    self._meas_last: float | None = None
+    self._cmd_last: float | None = None
+    self._ws_spread_last: float | None = None
+    self._lp: float | None = None                # low-passed measurement ("curve content")
     self._rms2 = 0.0               # EMA of squared high-passed residual
     self.counters = {c: 0 for c in REJ_CAUSES}
 
@@ -492,7 +497,7 @@ class QualityMonitor:
       ok = False
     return ok
 
-  def idle(self):
+  def idle(self) -> None:
     """Lateral inactive: rate baselines are meaningless across the gap."""
     self._meas_last = None
     self._cmd_last = None
@@ -515,7 +520,7 @@ class PeakMatcher:
   lag horizon, and the amplitude ratio is committed as gain evidence (median-of-N so a
   single weird apex dies before reaching the estimator)."""
 
-  def __init__(self, dt: float = 0.05):
+  def __init__(self, dt: float = 0.05) -> None:
     self.dt = dt
     self.n_buf = int(round(PEAK_BUF_S / dt))            # 50
     self.half_w = int(round(PEAK_HALF_WINDOW_S / dt))   # 20
@@ -523,16 +528,16 @@ class PeakMatcher:
     self.c = self.n_buf - 1 - max(self.half_w, self.lag_max)  # decision index
     self.buf: list[_PeakFrame] = []
     self._refractory = 0
-    self._pending: dict[int, list] = {0: [], 1: []}     # anchor half -> [(r, sample), ...]
+    self._pending: dict[int, list[tuple[float, PeakSample]]] = {0: [], 1: []}
     self.apexes_seen = 0
     self.apexes_committed = 0
 
-  def clear(self):
+  def clear(self) -> None:
     self.buf.clear()
     self._pending = {0: [], 1: []}
     self._refractory = 0
 
-  def poison_recent(self, seconds: float):
+  def poison_recent(self, seconds: float) -> None:
     """A disturbance was just detected: frames shortly BEFORE detection are suspect
     (the bump was already moving the car). Mark them not-ok retroactively."""
     n = int(round(seconds / self.dt))
@@ -540,7 +545,7 @@ class PeakMatcher:
       self.buf[i] = self.buf[i]._replace(clean=False)
 
   def push(self, kappa_cmd: float, kappa_meas: float, v_ego: float,
-           applied_gain: float, ok: bool) -> list[tuple]:
+           applied_gain: float, ok: bool) -> list[PeakSample]:
     """Advance one frame. Returns samples to commit: (v, kappa_cmd, kappa_meas,
     applied_gain) tuples (already median-filtered)."""
     self.buf.append(_PeakFrame(kappa_cmd, kappa_meas, v_ego, applied_gain, ok))
@@ -608,17 +613,17 @@ class SteadyStateGate:
   strategy itself computes, so offline and onboard gating are identical.
   """
 
-  def __init__(self, dt: float = 0.05):
+  def __init__(self, dt: float = 0.05) -> None:
     self.dt = dt
     self.steady_s = 0.0
-    self.kappa_last = None
-    self.kappa_window_start = None  # command value when the current steady window opened
+    self.kappa_last: float | None = None
+    self.kappa_window_start: float | None = None  # command value when the current steady window opened
     self.grip_cooldown_s = 0.0
     self.grip_this_frame = False    # grip seen on the frame last passed to update()
     self.frame_clear = False        # per-frame admission (no grip/cooldown/limiter flags),
     # computed ONCE here and shared with the apex path
 
-  def reset(self):
+  def reset(self) -> None:
     """Inactive frame (disengaged / human turn / stall blip): steadiness restarts and the
     last-command baseline is dropped; the grip cooldown keeps decaying in real time."""
     self.grip_cooldown_s = max(0.0, self.grip_cooldown_s - self.dt)
@@ -694,7 +699,7 @@ class AutoCalPipeline:
   in on subsequent update() calls — that closes the loop.
   """
 
-  def __init__(self, platform_gain_high: float, dt: float = 0.05):
+  def __init__(self, platform_gain_high: float, dt: float = 0.05) -> None:
     self.platform_gain_high = float(platform_gain_high)
     self.est = AngleFactorEstimator(platform_gain_high)
     self.gate = SteadyStateGate(dt=dt)
@@ -702,8 +707,8 @@ class AutoCalPipeline:
     self.peaks = PeakMatcher(dt=dt)
     self.dt = dt
     self._staged: list[_StagedSample] = []
-    self._meas_last = None
-    self._err_lp = None            # smoothed |tracking error| for the quietness gate
+    self._meas_last: float | None = None
+    self._err_lp: float | None = None            # smoothed |tracking error| for the quietness gate
     self._decay_accum = 0.0
     # Lag alignment: ring of recent (kappa_cmd, applied_gain) so this frame's measurement
     # can be ratioed against the command (and the gain in force) when it was ISSUED.
@@ -718,7 +723,7 @@ class AutoCalPipeline:
     # False = never freeze, keep adapting for the life of the toggle
     # Adjust-then-verify state (persisted): each step opens a window that must be judged
     # against fresh evidence before its anchor may step again. half 0 = low, 1 = high.
-    self.verify = {0: None, 1: None}     # {"frm": factor, "to": factor, "pre_r": ratio|None}
+    self.verify: dict[int, Verify | None] = {0: None, 1: None}
     self.verify_result = {0: "", 1: ""}  # last judgment: "confirmed" / "failed" / ""
     self.verify_hold = {0: 0.0, 1: 0.0}  # extra fresh evidence demanded after a failure
 
@@ -727,7 +732,7 @@ class AutoCalPipeline:
     a = speed_alpha(v_ego)
     return (1.0 - a) * (LOW_ANCHOR_BASE * low_factor) + a * (self.platform_gain_high * high_factor)
 
-  def idle(self):
+  def idle(self) -> None:
     """Call on frames where lateral is inactive (disengaged / human turn / stall blip)."""
     self.gate.reset()
     self.quality.idle()
@@ -737,7 +742,7 @@ class AutoCalPipeline:
     self._err_lp = None
     self._hist.clear()  # commands across a discontinuity must never be an alignment target
 
-  def update(self, frame: Frame) -> list:
+  def update(self, frame: Frame) -> list[Sample]:
     """Advance one frame. frame.low_factor/high_factor are the values currently steering
     the car — each committed sample records the gain that produced it. Returns the samples
     committed to the estimator this frame as (v, kappa_cmd, kappa_meas) tuples — the
@@ -813,8 +818,8 @@ class AutoCalPipeline:
       eligible = False
 
     # Age the staging queue; entries that survived the holdback graduate to the estimator.
-    committed = []
-    still_staged = []
+    committed: list[Sample] = []
+    still_staged: list[_StagedSample] = []
     for s in self._staged:
       s.age += self.dt
       if s.age >= PRESS_HOLDBACK_S:
@@ -860,7 +865,7 @@ class AutoCalPipeline:
 
     return committed
 
-  def _judge_verifies(self):
+  def _judge_verifies(self) -> None:
     """Judge any pending step once enough FRESH post-step evidence exists (the fast
     tracker was reset to zero when the step was taken, so it holds post-step data only).
 
@@ -890,7 +895,7 @@ class AutoCalPipeline:
         self.verify_result[half] = "failed"
         self.verify_hold[half] = VERIFY_FAIL_HOLD_WEIGHT
 
-  def recommend(self, low_factor: float, high_factor: float):
+  def recommend(self, low_factor: float, high_factor: float) -> tuple[float, float] | None:
     """The closed-loop step: propose nudged factor values, or None.
 
     Call once per frame with the currently applied factors; at most one nudge per
@@ -908,7 +913,7 @@ class AutoCalPipeline:
       return None
     low_t, high_t, st = sol
 
-    def step(half, target, applied, weight, stderr_eff):
+    def step(half: int, target: float, applied: float, weight: float, stderr_eff: float) -> float | None:
       if self.verify[half] is not None:
         return None  # the last step hasn't been judged against fresh evidence yet
       if not fit_trustworthy(weight, stderr_eff, NUDGE_MIN_WEIGHT):
@@ -943,7 +948,7 @@ class AutoCalPipeline:
     self.nudges += 1
     return out_low, out_high
 
-  def user_edit(self):
+  def user_edit(self) -> None:
     """The driver moved a factor by hand mid-collection: their judgment is information —
     adopt the value (it arrives via update()'s low/high_factor), soft-reset confidence so
     the estimator re-earns it, and restart lock progress. Evidence is NOT wiped: every
@@ -953,7 +958,7 @@ class AutoCalPipeline:
     self.since_nudge_s = 0.0
 
   # -- live UI state ----------------------------------------------------------------------
-  def ui_state(self, low_factor: float, high_factor: float) -> dict:
+  def ui_state(self, low_factor: float, high_factor: float) -> dict[str, Any]:
     """Per-anchor state for live dashboards (the phone /lateral page). Everything here is
     ground truth from the running pipeline — never a param re-read — and rounded hard
     because it travels as a ~1 Hz telemetry string.
@@ -965,19 +970,20 @@ class AutoCalPipeline:
     sol = self.est.solve()
     st = sol[2] if sol is not None else None
     targets = (sol[0], sol[1]) if sol is not None else (None, None)
-    out = {"nudges": self.nudges, "stable_s": round(self.stable_s)}
+    out: dict[str, Any] = {"nudges": self.nudges, "stable_s": round(self.stable_s)}
     for half, name, applied in ((0, "low", low_factor), (1, "high", high_factor)):
       weight = (st["weight_low"] if half == 0 else st["weight_high"]) if st is not None \
         else (self.est.weight_low if half == 0 else self.est.weight_high)
       stderr = (st["stderr_eff_low"] if half == 0 else st["stderr_eff_high"]) if st is not None else None
       w_rec, r_rec = self.est.recent_response(half)
       target = targets[half]
-      d = {"f": round(float(applied), 2), "w": round(weight, 1), "need": NUDGE_MIN_WEIGHT}
+      d: dict[str, Any] = {"f": round(float(applied), 2), "w": round(weight, 1), "need": NUDGE_MIN_WEIGHT}
       if r_rec is not None and w_rec >= 2.0:
         d["r"] = round(r_rec, 3)
-      if self.verify[half] is not None:
+      pending = self.verify[half]
+      if pending is not None:
         d["ph"] = "verify"
-        d["to"] = self.verify[half]["to"]
+        d["to"] = pending["to"]
         d["vw"] = round(w_rec, 1)
         d["vneed"] = VERIFY_MIN_WEIGHT
       elif (target is not None and stderr is not None
@@ -995,7 +1001,7 @@ class AutoCalPipeline:
     return out
 
   # -- persistence ------------------------------------------------------------------------
-  def to_dict(self) -> dict:
+  def to_dict(self) -> dict[str, object]:
     return {
       "est": self.est.to_dict(),
       "stable_s": round(self.stable_s, 2),
@@ -1009,7 +1015,7 @@ class AutoCalPipeline:
       "verify_hold": [self.verify_hold[0], self.verify_hold[1]],
     }
 
-  def from_dict(self, d: dict):
+  def from_dict(self, d: dict[str, Any]) -> None:
     self.est.from_dict(d["est"])
     self.stable_s = float(d.get("stable_s", 0.0))
     self.since_nudge_s = float(d.get("since_nudge_s", NUDGE_PERIOD_S))

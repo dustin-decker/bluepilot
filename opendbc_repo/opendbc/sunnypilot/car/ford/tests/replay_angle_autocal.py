@@ -6,10 +6,13 @@ are deliberately not reported as valid calibration or as closed-loop validation.
 """
 import argparse
 from collections import Counter
+from contextlib import nullcontext
 import json
 import math
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
+from unittest.mock import patch
 
 from openpilot.tools.lib.logreader import LogReader
 from opendbc.car.ford.values import CarControllerParams
@@ -18,28 +21,27 @@ from opendbc.sunnypilot.car.ford.tests.test_lateral_angle_ext import _Harness
 from opendbc.sunnypilot.car.ford.angle_autocal import MIN_KAPPA, MIN_SPEED, TORQUE_GUARD_NM, MAX_LAT_ACCEL, speed_alpha
 
 
-def observe_feed(controller, counts):
+def observe_feed(controller: Any, counts: Counter[str]) -> None:
   """Instrument the real admission path without changing its decisions."""
   feed = controller.feed
   add_sample = controller.pipeline.est.add_sample
 
-  def observed_sample(v, k, measured, gain, weight=1.0):
+  def observed_sample(v: float, k: float, measured: float, gain: float, weight: float = 1.0) -> bool:
     accepted = add_sample(v, k, measured, gain, weight)
     counts['estimator_attempts'] += 1
     if accepted:
-      counts['accepted_low' if speed_alpha(gain.speed) < 0.5 else 'accepted_high'] += 1
+      counts['accepted_low' if speed_alpha(v) < 0.5 else 'accepted_high'] += 1
       counts['accepted_positive' if k > 0 else 'accepted_negative'] += 1
     return accepted
   controller.pipeline.est.add_sample = observed_sample
 
-  def observed(frame, delay_estimated):
+  def observed(frame: Any, delay_estimated: bool) -> None:
     counts['feed_frames'] += 1
     counts['feed_small_command'] += int(abs(frame.kappa_cmd) < MIN_KAPPA)
     counts['feed_low_speed'] += int(frame.v_ego < MIN_SPEED)
     counts['feed_excess_lateral_accel'] += int(abs(frame.kappa_cmd) * frame.v_ego ** 2 > MAX_LAT_ACCEL)
     counts['feed_grip'] += int(frame.steering_pressed or abs(frame.driver_torque) > TORQUE_GUARD_NM)
     counts['feed_saturated'] += int(frame.saturated)
-    counts['feed_negligible_authority'] += int(frame.gain.blend < 0.05)
     counts['feed_opposite_sign'] += int(frame.kappa_cmd * frame.kappa_meas <= 0)
     feed(frame, delay_estimated)
     if controller.pipeline:
@@ -48,11 +50,27 @@ def observe_feed(controller, counts):
   controller.feed = observed
 
 
-def replay(paths, strength=1.0):
-  latest, stamps = {}, {}
-  ext = None
-  counts = Counter()
-  last = None
+def replay(paths: list[str], strength: float = 1.0, rough_rms_max: float | None = None,
+           long_accel_max: float | None = None) -> dict[str, Any]:
+  from opendbc.sunnypilot.car.ford import angle_autocal
+  limits: dict[str, float] = {}
+  if rough_rms_max is not None:
+    limits['ROUGH_RMS_MAX'] = rough_rms_max
+  if long_accel_max is not None:
+    limits['MAX_LONG_ACCEL'] = long_accel_max
+  if any(not math.isfinite(value) or value <= 0 for value in limits.values()):
+    raise ValueError('Quality limits must be finite and positive')
+  limits_for_patch: Any = limits  # unittest.mock's keyword patch surface is intentionally dynamic.
+  with patch.multiple(angle_autocal, **limits_for_patch) if limits else nullcontext():
+    return _replay(paths, strength)
+
+
+def _replay(paths: list[str], strength: float) -> dict[str, Any]:
+  latest: dict[str, Any] = {}
+  stamps: dict[str, int] = {}
+  ext: Any = None  # Test harness mirrors CarController's runtime mixin assembly.
+  counts: Counter[str] = Counter()
+  last: int | None = None
   params = _MockParams({'FordAngleAutoCal': True, 'FordAngleAutoCalLock': False,
                         'FordAngleSmoothing': True, 'FordAngleSmoothStrength': strength,
                         'FordLowSpeedFactor_ang': 1.0, 'FordHighSpeedFactor_ang': 1.0})
@@ -132,5 +150,7 @@ if __name__ == '__main__':
   parser = argparse.ArgumentParser(description=__doc__)
   parser.add_argument('rlogs', nargs='+')
   parser.add_argument('--strength', type=float, default=1.0)
+  parser.add_argument('--rough-rms-max', type=float, help='Offline only: rough-road rejection limit (1/m)')
+  parser.add_argument('--long-accel-max', type=float, help='Offline only: maximum |aEgo| (m/s²)')
   args = parser.parse_args()
-  print(json.dumps(replay(args.rlogs, args.strength), sort_keys=True))
+  print(json.dumps(replay(args.rlogs, args.strength, args.rough_rms_max, args.long_accel_max), sort_keys=True))

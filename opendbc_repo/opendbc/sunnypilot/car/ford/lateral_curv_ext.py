@@ -18,6 +18,7 @@ https://www.f150gen14.com/forum/threads/introducing-bluepilot-a-ford-specific-fo
 import math
 from collections import namedtuple, deque
 from enum import IntEnum
+from typing import Any
 
 import cereal.messaging as messaging
 import numpy as np
@@ -55,9 +56,9 @@ LateralResult = namedtuple('LateralResult', [
 ])
 
 
-def apply_ford_curvature_limits_ext(apply_curvature, apply_curvature_last, current_curvature,
-                                     v_ego_raw, steering_angle, lat_active, CP,
-                                     curvature_error=CarControllerParams.CURVATURE_ERROR):
+def apply_ford_curvature_limits_ext(apply_curvature: float, apply_curvature_last: float, current_curvature: float,
+                                     v_ego_raw: float, steering_angle: float, lat_active: bool, CP: Any,
+                                     curvature_error: float = CarControllerParams.CURVATURE_ERROR) -> tuple[float, float, bool]:
   """Extended version of apply_ford_curvature_limits that returns
   (apply_curvature, max_curvature, curvature_deviation_limited).
 
@@ -69,7 +70,7 @@ def apply_ford_curvature_limits_ext(apply_curvature, apply_curvature_last, curre
   maneuver was limited by deviation from measured current curvature, not by rate-of-change
   (apply_std_steer_angle_limits below is a separate limiter with its own telemetry).
   """
-  max_curvature = 1  # large initial value
+  max_curvature = 1.0  # large initial value
   curvature_deviation_limited = False
 
   # No blending at low speed due to lack of torque wind-up and inaccurate current curvature
@@ -111,7 +112,7 @@ class LateralCurvExt:
   4-signal steering command instead of the upstream curvature-only approach.
   """
 
-  def __init__(self, CP, CP_SP):
+  def __init__(self, CP: Any, CP_SP: Any) -> None:
     # SubMaster for model data, live parameters, and selfdrive state
     # liveDelay is consumed by LateralAngleExt (variable lookup time); harmless for curvature mode.
     self.sm = messaging.SubMaster(['modelV2', 'liveParameters', 'selfdriveState', 'radarState', 'liveDelay'])
@@ -181,7 +182,7 @@ class LateralCurvExt:
     # Curvature rate computation
     self.curvature_rate_delta_t = 0.3  # seconds for derivative window
     _dt_lat = CarControllerParams.STEER_STEP * DT_CTRL
-    self.curvature_rate_deque = deque(maxlen=int(round(self.curvature_rate_delta_t / _dt_lat)))
+    self.curvature_rate_deque: deque[float] = deque(maxlen=int(round(self.curvature_rate_delta_t / _dt_lat)))
     self.curvature_rate_speed_bp = [0.0, 14.5, 15.5]  # m/s
     self.curvature_rate_speed_v = [1.0, 1.0, 0.0]
     self.curvature_rate_PC_bp = [0.0, 0.008, 0.01]  # 1/m
@@ -199,7 +200,7 @@ class LateralCurvExt:
 
     # PID-based path angle for lane centering
     self.path_angle_filter_samples = 3
-    self.path_angle_deque = deque(maxlen=self.path_angle_filter_samples)
+    self.path_angle_deque: deque[float] = deque(maxlen=self.path_angle_filter_samples)
     self.LC_PID_gain_UI_curv = 0.0
     self.LC_PID_gain = 3.0
     self.LC_PID_k_p = 0.25
@@ -270,7 +271,7 @@ class LateralCurvExt:
                                      CS.out.vEgoRaw, roll)
     return -CS.out.yawRate / max(CS.out.vEgoRaw, 0.1)
 
-  def update_sm(self):
+  def update_sm(self) -> None:
     """Update SubMaster and vehicle model. Called each frame before lateral/long update."""
     self.sm.update(0)
 
@@ -286,7 +287,7 @@ class LateralCurvExt:
       sr = max(self.lp.steerRatio, 0.1)
       self.VM.update_params(x, sr)
 
-  def update(self, CC, CS, actuators, apply_curvature_last, CP):
+  def update(self, CC: Any, CS: Any, actuators: Any, apply_curvature_last: float, CP: Any) -> LateralResult:
     """
     Compute lateral steering signals for the current frame.
 

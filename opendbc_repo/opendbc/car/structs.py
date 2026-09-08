@@ -230,6 +230,14 @@ class ControllerStateBP:
   # default instead. That gap muted the auto-cal telemetry on every build until 2026-07-22.
   bmsAngleAutoCalibrate: bool = False
   bmsAngleAutoCalState: str = ""
+  angleTuningValid: bool = False
+  bmsAngleSmoothing: bool = False
+  bmsAngleSmoothStrength: float = 0.0
+  angleSmoothingActive: bool = False
+  bmsHighSpeedDampeningAngle: float = 0.0
+  bmsAngleAutoCalLock: bool = False
+  angleAutoCalRequested: bool = False
+  angleAutoCalEvents: str = ""
   bmsLowSpeedAdjustmentFactor: float = 1.0
   bmsHighSpeedAdjustmentFactor: float = 1.0
   bmsLaneChangeFactorHighAngle: float = 1.0

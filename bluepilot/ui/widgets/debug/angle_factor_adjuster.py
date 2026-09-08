@@ -4,7 +4,7 @@ BluePilot: Ford angle-mode Low/High Speed Factor stepper.
 Shown alongside the lateral debug graph, only while Primary Control Variable is Angle.
 A tap on Up/Down nudges FordLowSpeedFactor_ang / FordHighSpeedFactor_ang together, split
 between the two in proportion to how much each contributes at the current speed -- the same
-25/70 mph speed-blend LateralAngleExt.update_angle_strategy uses for low_gain_calc/high_gain_calc
+30/60 mph speed-blend LateralAngleExt.update_angle_strategy uses for low_gain_calc/high_gain_calc
 (opendbc/sunnypilot/car/ford/lateral_angle_ext.py).
 """
 import pyray as rl
@@ -30,7 +30,7 @@ STEP = 0.01
 _DIM_FLOOR = 0.2
 
 # Matches the speed breakpoints in LateralAngleExt.update_angle_strategy: fully low-factor
-# at/below ~25 mph, fully high-factor at/above ~70 mph, blended in between.
+# at/below ~30 mph, fully high-factor at/above ~60 mph, blended in between.
 _SPEED_LOW_MS = V_LOW
 _SPEED_HIGH_MS = V_HIGH
 
