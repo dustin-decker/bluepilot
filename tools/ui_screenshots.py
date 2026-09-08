@@ -31,6 +31,8 @@ def render(variant: str, output: Path) -> None:
     gui_app.init_window('BluePilot component screenshots', fps=60)
     # The application's scissor wrapper targets its scaled window, not our full-size texture.
     rl.begin_scissor_mode = rl._orig_begin_scissor_mode
+    gui_app._scale = 1.0  # Load full-resolution assets for the full-size fixture texture.
+    rl.get_time = lambda: 1.0  # Freeze native shimmer animation for repeatable screenshots.
     try:
       output.mkdir(parents=True, exist_ok=True)
       width, height = (2160, 1080) if variant == 'tici' else (536, 240)
@@ -48,6 +50,19 @@ def render(variant: str, output: Path) -> None:
               raise RuntimeError(f'Could not export {name}')
           finally:
             rl.unload_image(image)
+
+        from openpilot.selfdrive.ui.bp.lib import calibration_reset
+        calibration_reset.ui_state = SimpleNamespace(started=False, engaged=False, params=SimpleNamespace(get_bool=lambda _: False))
+        dialogs = []
+        push_widget = gui_app.push_widget
+        try:
+          gui_app.push_widget = dialogs.append
+          for key, name in [('LiveDelay', 'reset-delay'), ('LiveTorqueParameters', 'reset-torque')]:
+            calibration_reset.prompt_steering_reset(key)
+            dialog = dialogs[-1]
+            snapshot(name, lambda dialog=dialog: dialog.render(rl.Rectangle(0, 0, width, height)))
+        finally:
+          gui_app.push_widget = push_widget
 
         if variant == 'mici':
           from openpilot.selfdrive.ui.sunnypilot.mici.layouts.models import CurrentModelInfo
@@ -67,6 +82,29 @@ def render(variant: str, output: Path) -> None:
           from openpilot.selfdrive.ui.sunnypilot.onroad import developer_ui as diagnostics
           from bluepilot.ui.widgets.debug.autocal_bars import AutoCalBars
           from cereal import log
+
+          from openpilot.selfdrive.ui.bp.widgets.section_header import CollapsibleSectionHeader
+          from openpilot.selfdrive.ui.bp.widgets.float_control_item import float_control_item
+          from openpilot.system.ui.widgets.scroller_tici import Scroller
+          rows = [float_control_item(title, 'Adjust the steering response.', param=key) for title, key in [
+            ('Low-Speed Angle Factor', 'FordLowSpeedFactor_ang'),
+            ('High-Speed Angle Factor', 'FordHighSpeedFactor_ang'),
+            ('High-Speed Dampening', 'FordHighSpeedDampening_ang'),
+          ]]
+          angle_header = CollapsibleSectionHeader('Angle Tuning')
+          angle_header.set_items(rows)
+          lateral_header = CollapsibleSectionHeader('Lateral Tuning')
+          lateral_header.set_items([angle_header])
+          lateral_header.set_nested_headers([angle_header])
+          menu = Scroller([lateral_header, angle_header, *rows], spacing=0, line_separator=True)
+          for name in ('lateral-open', 'lateral-reopened'):
+            menu.show_event()
+            lateral_header._toggle()
+            angle_header._toggle()
+            snapshot(name, lambda: menu.render(rl.Rectangle(600, 60, 1500, 960)))
+            for row in rows:
+              row._set_description_visible(True)
+            menu.hide_event()
 
           # Real cereal data, fed directly to widgets: no publishers or live routes.
           services = ('carState', 'carControl', 'controlsState', 'radarState', 'liveParameters', 'livePose',

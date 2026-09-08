@@ -16,6 +16,9 @@ from openpilot.selfdrive.ui.mici.layouts.onboarding import TrainingGuide, TermsP
 from openpilot.system.ui.lib.application import gui_app, FontWeight, MousePos
 from openpilot.system.ui.lib.multilang import tr
 from openpilot.system.ui.widgets import Widget
+# BluePilot: keep every camera-reset entry point camera-only.
+from openpilot.selfdrive.ui.bp.lib.calibration_reset import reset_camera_calibration
+# End BluePilot
 from openpilot.selfdrive.ui.ui_state import device, ui_state
 from openpilot.system.ui.widgets.label import UnifiedLabel
 from openpilot.system.ui.widgets.html_render import HtmlModal, HtmlRenderer
@@ -24,7 +27,7 @@ from openpilot.system.athena.registration import UNREGISTERED_DONGLE_ID
 
 class ReviewTermsPage(TermsPage, NavScroller):
   """TermsPage with NavWidget swipe-to-dismiss for reviewing in device settings."""
-  def __init__(self):
+  def __init__(self) -> None:
     super().__init__(on_accept=self.dismiss, on_decline=self.dismiss)
     self._terms_header.set_visible(False)
     self._must_accept_card.set_visible(False)
@@ -92,7 +95,7 @@ class EngagedConfirmationButton(BigButton):
 
 
 class DeviceInfoLayoutMici(Widget):
-  def __init__(self):
+  def __init__(self) -> None:
     super().__init__()
 
     self.set_rect(rl.Rectangle(0, 0, 360, 180))
@@ -168,7 +171,7 @@ UPDATER_TIMEOUT = 10.0  # seconds to wait for updater to respond
 
 
 class UpdateOpenpilotBigButton(BigButton):
-  def __init__(self):
+  def __init__(self) -> None:
     self._txt_update_icon = gui_app.texture("icons_mici/settings/device/update.png", 64, 75)
     self._txt_reboot_icon = gui_app.texture("icons_mici/settings/device/reboot.png", 64, 70)
     self._txt_up_to_date_icon = gui_app.texture("icons_mici/settings/device/up_to_date.png", 64, 64)
@@ -184,7 +187,7 @@ class UpdateOpenpilotBigButton(BigButton):
     if ui_state.is_offroad():
       self.set_enabled(True)
 
-  def _handle_mouse_release(self, mouse_pos: MousePos):
+  def _handle_mouse_release(self, mouse_pos: MousePos) -> None:
     super()._handle_mouse_release(mouse_pos)
 
     if not system_time_valid():
@@ -196,7 +199,7 @@ class UpdateOpenpilotBigButton(BigButton):
     self._state = UpdaterState.WAITING_FOR_UPDATER
     self.set_icon(self._txt_update_icon)
 
-    def run():
+    def run() -> None:
       if self.get_value() == "download update":
         os.system("pkill -SIGHUP -f system.updated.updated")
       elif self.get_value() == "update now":
@@ -206,7 +209,7 @@ class UpdateOpenpilotBigButton(BigButton):
 
     threading.Thread(target=run, daemon=True).start()
 
-  def set_value(self, value: str):
+  def set_value(self, value: str) -> None:
     super().set_value(value)
     if value:
       self.set_text("")
@@ -287,31 +290,28 @@ class UpdateOpenpilotBigButton(BigButton):
 
 
 class DeviceLayoutMici(NavScroller):
-  def __init__(self):
+  def __init__(self) -> None:
     super().__init__()
 
     self._fcc_dialog: HtmlModal | None = None
 
-    def power_off_callback():
+    def power_off_callback() -> None:
       ui_state.params.put_bool("DoShutdown", True, block=True)
 
-    def reboot_callback():
+    def reboot_callback() -> None:
       ui_state.params.put_bool("DoReboot", True, block=True)
 
-    def reset_calibration_callback():
+    def reset_calibration_callback() -> None:
       params = ui_state.params
-      params.remove("CalibrationParams")
-      params.remove("LiveTorqueParameters")
-      params.remove("LiveParameters")
-      params.remove("LiveParametersV2")
-      params.remove("LiveDelay")
-      params.put_bool("OnroadCycleRequested", True, block=True)
+      # BluePilot: camera reset preserves learned steering calibration.
+      reset_camera_calibration(params, restart=True)
+      # End BluePilot
 
-    def uninstall_openpilot_callback():
+    def uninstall_openpilot_callback() -> None:
       ui_state.params.put_bool("DoUninstall", True, block=True)
 
-    reset_calibration_btn = EngagedConfirmationButton("reset calibration", "reset", gui_app.texture("icons_mici/settings/device/lkas.png", 122, 64),
-                                                      reset_calibration_callback)
+    reset_calibration_btn = EngagedConfirmationButton(
+      "reset camera calibration", "reset camera", gui_app.texture("icons_mici/settings/device/lkas.png", 122, 64), reset_calibration_callback)
 
     uninstall_openpilot_btn = EngagedConfirmationButton("uninstall bluepilot", "uninstall",
                                                         gui_app.texture("icons_mici/settings/device/uninstall.png", 64, 64),

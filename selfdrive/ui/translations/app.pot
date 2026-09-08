@@ -869,3 +869,54 @@ msgstr ""
 msgid "camera starting"
 msgstr ""
 
+
+msgid "Are you sure you want to reset camera calibration?"
+msgstr ""
+
+msgid "Clear learned torque response for torque-controlled cars. Relearning takes time over future drives. Vehicle must be off."
+msgstr ""
+
+msgid "Clear the learned steering delay. Relearning takes time over future drives. Vehicle must be off."
+msgstr ""
+
+msgid "Disengage to Reset Camera Calibration"
+msgstr ""
+
+msgid "Learning is {}% complete."
+msgstr ""
+
+msgid "Model download has started in the background. We suggest resetting camera calibration. Would you like to do that now?"
+msgstr ""
+
+msgid "Relearning takes time over future drives."
+msgstr ""
+
+msgid "Relearning takes time over future drives. Vehicle must be off to reset."
+msgstr ""
+
+msgid "Reset Camera Calibration"
+msgstr ""
+
+msgid "Reset Learned Torque Parameters"
+msgstr ""
+
+msgid "Reset Steering Delay Calibration"
+msgstr ""
+
+msgid "Reset and Relearn"
+msgstr ""
+
+msgid "Turn the vehicle off before resetting steering calibration."
+msgstr ""
+
+msgid "relearning takes\ndriving time"
+msgstr ""
+
+msgid "reset learned torque?"
+msgstr ""
+
+msgid "reset steering delay?"
+msgstr ""
+
+msgid "bluepilot is continuously calibrating, resetting is rarely required. Resetting camera calibration will restart bluepilot if the car is powered on."
+msgstr ""

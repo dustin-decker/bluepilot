@@ -13,6 +13,9 @@ from cereal import custom
 from openpilot.sunnypilot.models.default_model import DEFAULT_MODEL
 from openpilot.sunnypilot.models.helpers import ACTIVE_BUNDLE_KEYS, get_active_source
 from openpilot.common.constants import CV
+# BluePilot: keep every camera-reset entry point camera-only.
+from openpilot.selfdrive.ui.bp.lib.calibration_reset import reset_camera_calibration
+# End BluePilot
 from openpilot.selfdrive.ui.ui_state import device, ui_state
 from openpilot.system.ui.lib.multilang import tr
 from openpilot.system.ui.lib.application import gui_app
@@ -187,13 +190,14 @@ class ModelsLayout(Widget):
         label.action_item.update(p.progress, text, show, color)
 
   @staticmethod
-  def _show_reset_params_dialog():
-    def _callback(response):
-      if response == DialogResult.CONFIRM:
-        ui_state.params.remove("CalibrationParams")
-        ui_state.params.remove("LiveTorqueParameters")
-    msg = tr("Model download has started in the background. We suggest resetting calibration. Would you like to do that now?")
-    dialog = ConfirmDialog(msg, tr("Reset Calibration"), callback=_callback)
+  def _show_reset_params_dialog() -> None:
+    def _callback(response: DialogResult) -> None:
+      # BluePilot: camera-only reset, rechecking engagement when the user confirms.
+      if response == DialogResult.CONFIRM and not ui_state.engaged:
+        reset_camera_calibration(ui_state.params)
+      # End BluePilot
+    msg = tr("Model download has started in the background. We suggest resetting camera calibration. Would you like to do that now?")
+    dialog = ConfirmDialog(msg, tr("Reset Camera Calibration"), callback=_callback)
     gui_app.push_widget(dialog)
 
   def _on_model_selected(self, result):

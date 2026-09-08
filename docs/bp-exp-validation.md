@@ -1,8 +1,18 @@
 # bp-exp integration and validation
 
-## Current branch: PR #191/#192 removed (2026-09-07)
+## Current branch: Original angle controller restored (2026-09-07)
 
-Restored angle strategy, gain schedule, estimator, and their tests to the integration immediately preceding PR #191. Its latest commit also included PR #192. The original PR commits and dependent retune adaptations are absent from the rewritten branch ancestry. Model/parser updates, PR #194 takeover guards, AutoCal/smoothing, and gauge layout fixes are retained. Version-2 retune evidence and locks are not restored by this version-1 estimator. Factor values require independent retuning; historical results below describe the removed configuration and are not validation of the current controller.
+Restored the original angle strategy, gain schedule, estimator, and their tests. The experimental retune and dependent adaptations are absent from the branch. Model/parser updates, PR #194 takeover guards, AutoCal/smoothing, and gauge layout fixes are retained. Version-2 retune evidence and locks are not restored by this version-1 estimator. Factor values require independent retuning; historical results below describe the removed configuration and are not validation of the current controller.
+
+## Independent calibration resets — September 7, 2026
+
+Camera reset actions on TICI, MICI, and the model-selection prompt preserve steering learning. Separate offroad, confirmed delay/torque resets warn about relearning time. The Device button previously discarded steering delay; resetting the camera there after a model change now preserves that time-consuming estimate. The model-selection prompt already preserved delay and now also preserves learned torque.
+
+Local checks: 10 reset/progress tests, 48 translation checks, and 16 native widget screenshot comparisons pass. Tests use isolated parameters; no actual device calibration is reset. The web portal's panel directory is absent on this branch and the device returns an empty panel list, so it exposes no corresponding reset action.
+
+## Collapsed settings row layout — September 7, 2026
+
+Reproduced overlapping lateral controls after opening descriptions and reopening the menu: hidden rows cached a height of zero. ListItem now retains its intrinsic height; Scroller still excludes hidden rows. Stock and SunnyPilot row variants have lifecycle regressions, and native component snapshots cover opening and reopening nested lateral sections. These checks reproduce the overlap; they do not establish that every possible rendering issue is resolved.
 
 ## Historical validation before removal
 
@@ -14,7 +24,6 @@ Experimental branch on Dustin's fork; checked 2026-09-06. This is not a driving-
 - Merges `ford-angle-autocal` (`8907ca96a7`), preserving ghbarker's original autocal/smoothing commits and Dustin's enlarged gauges.
 - The latest combined [PR #172](https://github.com/BluePilotDev/bluepilot/pull/172) tree (`1cdbd4b299`) equals `6baea2adab`; the split #161/#171/#172 series does not add a newer implementation to import.
 - Merges John Christman's [PR #175](https://github.com/BluePilotDev/bluepilot/pull/175), including the live-delay indicator and branding.
-- Merges Praeuner's full [PR #191](https://github.com/BluePilotDev/bluepilot/pull/191) gain retune and prediction blend, not just its smoothing changes.
 - Merges [PR #194](https://github.com/BluePilotDev/bluepilot/pull/194), preserving its John Christman/Claude attribution: ALP deviation budget, takeover debounce and stall guards.
 
 Original commits are retained through merges. Integration fixes are separate commits. Optional angle smoothing remains layered on the new baseline; the inherited separate prediction/entry horizons and reset paths are retained.
@@ -27,7 +36,7 @@ The production command carries its actual total gain, fixed low-curve contributi
 
 Normal equations retain `blend²` noise weighting. Admission-duration thresholds use seconds, and covariance uses admitted duration rather than treating inverse-noise weights as observation counts. Verification and outlier checks operate in the adjustable domain. Manual stepper and gauge labels share the new speed anchors.
 
-Saved v1 evidence and locks are rejected. Existing factor settings are **not automatically converted**: PR #191 changes both the bases and the speed/curvature schedules, so no two-factor conversion preserves the old response everywhere. Previously calibrated settings must not be assumed calibrated under this retune. The deployment device had no saved autocal state and autocal was not enabled; its manual factors (1.0/1.1) were left untouched. A policy for migrating other installations' v1 factors remains a user decision.
+Saved v1 evidence and locks are rejected. Existing factor settings are **not automatically converted**: the historical retune changes both the bases and the speed/curvature schedules, so no two-factor conversion preserves the old response everywhere. Previously calibrated settings must not be assumed calibrated under this retune. The deployment device had no saved autocal state and autocal was not enabled; its manual factors (1.0/1.1) were left untouched. A policy for migrating other installations' v1 factors remains a user decision.
 
 ## Checks
 

@@ -871,3 +871,54 @@ msgstr "✓ SUBSCRIBED"
 msgid "🔥 Firehose Mode 🔥"
 msgstr "🔥 Firehose Mode 🔥"
 
+
+msgid "Are you sure you want to reset camera calibration?"
+msgstr "Are you sure you want to reset camera calibration?"
+
+msgid "Clear learned torque response for torque-controlled cars. Relearning takes time over future drives. Vehicle must be off."
+msgstr "Clear learned torque response for torque-controlled cars. Relearning takes time over future drives. Vehicle must be off."
+
+msgid "Clear the learned steering delay. Relearning takes time over future drives. Vehicle must be off."
+msgstr "Clear the learned steering delay. Relearning takes time over future drives. Vehicle must be off."
+
+msgid "Disengage to Reset Camera Calibration"
+msgstr "Disengage to Reset Camera Calibration"
+
+msgid "Learning is {}% complete."
+msgstr "Learning is {}% complete."
+
+msgid "Model download has started in the background. We suggest resetting camera calibration. Would you like to do that now?"
+msgstr "Model download has started in the background. We suggest resetting camera calibration. Would you like to do that now?"
+
+msgid "Relearning takes time over future drives."
+msgstr "Relearning takes time over future drives."
+
+msgid "Relearning takes time over future drives. Vehicle must be off to reset."
+msgstr "Relearning takes time over future drives. Vehicle must be off to reset."
+
+msgid "Reset Camera Calibration"
+msgstr "Reset Camera Calibration"
+
+msgid "Reset Learned Torque Parameters"
+msgstr "Reset Learned Torque Parameters"
+
+msgid "Reset Steering Delay Calibration"
+msgstr "Reset Steering Delay Calibration"
+
+msgid "Reset and Relearn"
+msgstr "Reset and Relearn"
+
+msgid "Turn the vehicle off before resetting steering calibration."
+msgstr "Turn the vehicle off before resetting steering calibration."
+
+msgid "relearning takes\ndriving time"
+msgstr "relearning takes\ndriving time"
+
+msgid "reset learned torque?"
+msgstr "reset learned torque?"
+
+msgid "reset steering delay?"
+msgstr "reset steering delay?"
+
+msgid "bluepilot is continuously calibrating, resetting is rarely required. Resetting camera calibration will restart bluepilot if the car is powered on."
+msgstr "bluepilot is continuously calibrating, resetting is rarely required. Resetting camera calibration will restart bluepilot if the car is powered on."

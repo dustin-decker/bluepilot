@@ -11,6 +11,7 @@ from openpilot.system.ui.lib.application import gui_app
 from openpilot.system.ui.lib.multilang import tr
 from openpilot.system.ui.lib.wifi_manager import WifiManager, Network
 from openpilot.selfdrive.ui.ui_state import ui_state
+from openpilot.selfdrive.ui.bp.lib.calibration_reset import prompt_steering_reset, steering_learning_description
 from openpilot.selfdrive.ui.bp.widgets.float_control_item import float_control_item, int_control_item
 from openpilot.selfdrive.ui.bp.widgets.section_header import CollapsibleSectionHeader
 from openpilot.selfdrive.ui.bp.lib.steering_wheel_style import (
@@ -776,12 +777,27 @@ class BluePilotLayout(Widget):
 
     # Lateral Tuning: outer section. Disable toggle and mode selector up top, then mode-agnostic
     # lane-change items, then the two nested sub-sections (always visible, greyed by mode above).
+    self._reset_live_delay = button_item(
+      lambda: tr("Reset Steering Delay Calibration"), lambda: tr("RESET"),
+      lambda: tr("Clear the learned steering delay. Relearning takes time over future drives. Vehicle must be off."),
+      callback=lambda: prompt_steering_reset('LiveDelay'),
+    )
+    self._reset_learned_torque = button_item(
+      lambda: tr("Reset Learned Torque Parameters"), lambda: tr("RESET"),
+      lambda: tr("Clear learned torque response for torque-controlled cars. Relearning takes time over future drives. Vehicle must be off."),
+      callback=lambda: prompt_steering_reset('LiveTorqueParameters'),
+    )
+    for item, key in [(self._reset_live_delay, 'LiveDelay'), (self._reset_learned_torque, 'LiveTorqueParameters')]:
+      item.set_description_opened_callback(
+        lambda item=item, key=key: item.set_description(steering_learning_description(self._params, key)))
     lateral_items = [
       self._disable_BP_lat,
       self._primary_lateral_control_btn,
       self._disable_lane_change_under_speed,
       self._blinker_min_speed,
       self._show_lateral_control,
+      self._reset_live_delay,
+      self._reset_learned_torque,
     ]
     lateral_header = CollapsibleSectionHeader(tr("Lateral Tuning"))
     lateral_header.set_items(lateral_items + [angle_header, curv_header])

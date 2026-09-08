@@ -1,6 +1,8 @@
 """BluePilot MICI: Lateral tuning panel — control variable, factors, lane change, offset, mode display."""
 
 from collections.abc import Callable
+from typing import Any, cast
+from openpilot.selfdrive.ui.bp.lib.calibration_reset import prompt_steering_reset
 
 from openpilot.selfdrive.ui.bp.mici.widgets.button_bp import BigButtonBP, BigParamControlBP
 from openpilot.selfdrive.ui.bp.mici.widgets.floatbutton import BigParamFloatControl, BigParamIntControl
@@ -16,10 +18,10 @@ class _EraseAutoCalButton(BigButtonBP):
   next refresh); the onroad controller consumes FordAngleAutoCalReset to drop its
   in-memory pipeline too, so a mid-drive erase takes effect within a second."""
 
-  def __init__(self):
+  def __init__(self) -> None:
     super().__init__("Erase Calibration Memory")
 
-  def _handle_mouse_release(self, mouse_pos):
+  def _handle_mouse_release(self, mouse_pos: Any) -> None:
     super()._handle_mouse_release(mouse_pos)
     ui_state.params.put_bool("FordAngleAutoCalReset", True)
     ui_state.params.put("FordAngleAutoCalState", "")
@@ -29,7 +31,7 @@ class _EraseAutoCalButton(BigButtonBP):
 
 
 class LateralLayoutMici(NavScroller):
-  def __init__(self, back_callback: Callable[[], None] | None = None):
+  def __init__(self, back_callback: Callable[[], None] | None = None) -> None:
     super().__init__()
     if back_callback is not None:
       self.set_back_callback(back_callback)
@@ -120,6 +122,11 @@ class LateralLayoutMici(NavScroller):
       "centering pid gain", "LC_PID_gain_UI_curv", min=0.0, max=50.0, step=0.5,
     )
 
+    self.reset_live_delay = BigButtonBP("reset steering delay")
+    self.reset_live_delay.set_click_callback(lambda: prompt_steering_reset('LiveDelay'))
+    self.reset_learned_torque = BigButtonBP("reset learned torque")
+    self.reset_learned_torque.set_click_callback(lambda: prompt_steering_reset('LiveTorqueParameters'))
+
     self._scroller.add_widgets([
       self.low_speed_factor,
       self.high_speed_factor,
@@ -146,6 +153,8 @@ class LateralLayoutMici(NavScroller):
       self.lc_pid_gain,
       self.show_lateral_control,
       self.disable_BP_lat,
+      self.reset_live_delay,
+      self.reset_learned_torque,
     ])
 
     self._refresh_toggles = (
@@ -164,16 +173,16 @@ class LateralLayoutMici(NavScroller):
 
     ui_state.add_offroad_transition_callback(self._update_toggles)
 
-  def _on_autocal_toggled(self, state: bool):
+  def _on_autocal_toggled(self, state: bool) -> None:
     """Disarming clears a finished calibration's lock so re-enabling starts fresh."""
     if not state:
       ui_state.params.put("FordAngleAutoCalState", "")
 
-  def show_event(self):
+  def show_event(self) -> None:
     super().show_event()
     self._update_toggles()
 
-  def _update_toggles(self):
+  def _update_toggles(self) -> None:
     ui_state.update_params()
     for key, item in self._refresh_toggles:
       item.set_checked(ui_state.params.get_bool(key))
@@ -196,7 +205,7 @@ class LateralLayoutMici(NavScroller):
     self.lane_centering_strength_ang.set_visible(is_angle)
     self.lane_centering_strength_ang.set_enabled(lane_pos_ang)
     self.blinker_min_speed.set_enabled(ui_state.params.get_bool("BlinkerPauseLaneChange"))
-    for item in (
+    for curv_item in (
       self.lane_change_factor_high_curv,
       self.enable_human_turn_detection,
       self.enable_lane_positioning,
@@ -206,4 +215,4 @@ class LateralLayoutMici(NavScroller):
       self.pc_blend_ratio_low_C,
       self.lc_pid_gain,
     ):
-      item.set_visible(is_curv)
+      cast(Any, curv_item).set_visible(is_curv)

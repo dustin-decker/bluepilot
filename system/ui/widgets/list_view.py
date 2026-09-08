@@ -404,9 +404,9 @@ class ListItem(Widget):
     return _resolve_value(self._description, "")
 
   def get_item_height(self, font: rl.Font, max_width: int) -> float:
-    if not self.is_visible:
-      return 0
-
+    # BluePilot: remove the hidden-row early return; preserve intrinsic height.
+    # Scroller filters hidden rows; caching zero here stacks them when reopened.
+    # End BluePilot
     height = float(ITEM_BASE_HEIGHT)
     if self.description_visible:
       description_height = self._html_renderer.get_total_height(max_width)

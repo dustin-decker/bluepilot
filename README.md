@@ -58,6 +58,10 @@ These are additions to this branch's `bp-dev` base, not claims that the underlyi
 | **Steering-delay calibration indicator** and the associated branding updates. | John Christman: [#175](https://github.com/BluePilotDev/bluepilot/pull/175). |
 | **Lane-positioning limits and takeover guards:** symmetric lane-positioning budget, stall handling, and protection against takeover oscillation. | John Christman, with credited Claude co-authorship: [#194](https://github.com/BluePilotDev/bluepilot/pull/194). |
 
-**Validation limits:** builds, tests, and historical replay checks are documented in [bp-exp validation](docs/bp-exp-validation.md). The branch uses the pre-#191/#192 angle-control gains and prediction logic. Calibration evidence collected with the removed retune is incompatible; manual factor values are not automatically converted.
+**Calibration resets:** Device → Reset Camera Calibration and the model-change reset prompt clear camera calibration only. Using the Device reset after a model change now preserves learned steering delay, torque response, and vehicle parameters, avoiding an unnecessary lengthy relearn. The model prompt also preserves learned torque; it already preserved steering delay. BluePilot → Lateral Tuning (Lateral on MICI) has separate steering-delay and learned-torque reset buttons, each requiring offroad confirmation and warning that relearning takes driving time. Integration by Dustin Decker.
+
+**Settings rendering:** reopening a collapsed lateral section after viewing a setting description preserves row spacing, preventing overlapping text and controls.
+
+**Validation limits:** builds, tests, and historical replay checks are documented in [bp-exp validation](docs/bp-exp-validation.md). The branch retains its original angle-control gains and prediction logic. Calibration evidence collected with the removed retune is incompatible; manual factor values are not automatically converted.
 
 For the underlying project, see [BluePilot](https://github.com/BluePilotDev/bluepilot) and the [sunnypilot README](README_SP.md). Existing [license terms](LICENSE) and component-specific licenses continue to apply.

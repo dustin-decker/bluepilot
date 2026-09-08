@@ -50,7 +50,7 @@ run = "uv run scons --minimal -j${BP_BUILD_JOBS:-4} common/params_pyx.so msgq_re
 description = "Check native imports and offline tooling"
 run = """
 uv run python -c 'import msgq.ipc_pyx, openpilot.common.params_pyx; from openpilot.selfdrive.test.process_replay.process_replay import get_process_config; print(get_process_config("card").proc_name)'
-uv run python -m pytest -q -o addopts='' tools/tests/test_device.py tools/tests/test_autocal_analysis.py opendbc_repo/opendbc/sunnypilot/car/ford/tests/test_replay_quality_limits.py bluepilot/selfdrive/car/tests/test_angle_route_telemetry.py
+uv run python -m pytest -q -o addopts='' tools/tests/test_device.py tools/tests/test_autocal_analysis.py opendbc_repo/opendbc/sunnypilot/car/ford/tests/test_replay_quality_limits.py bluepilot/selfdrive/car/tests/test_angle_route_telemetry.py selfdrive/ui/bp/tests/test_calibration_reset.py selfdrive/ui/bp/tests/test_section_layout.py
 """
 
 [tasks."autocal:extract"]
