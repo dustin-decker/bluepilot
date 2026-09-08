@@ -14,6 +14,7 @@ import { RoutesView } from '@/views/RoutesView'
 import { ParametersView } from '@/views/ParametersView'
 import { SettingsView } from '@/views/SettingsView'
 import { LogsView } from '@/views/LogsView'
+import { LearnedStopsView } from '@/views/LearnedStopsView'
 
 // Styles
 import '@/styles/variables.css'
@@ -99,6 +100,7 @@ function App() {
         <Route path="/routes" element={<RoutesView deviceStatus={deviceStatus} />} />
         <Route path="/parameters" element={<ParametersView deviceStatus={deviceStatus} />} />
         <Route path="/logs" element={<LogsView deviceStatus={deviceStatus} />} />
+        <Route path="/learned-stops" element={<LearnedStopsView deviceStatus={deviceStatus} />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

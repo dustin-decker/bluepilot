@@ -8,7 +8,7 @@ import pytest
 
 
 @pytest.mark.skipif(os.getenv('BP_UI_SCREENSHOTS') != '1', reason='opt in with mise run ui:screenshots; requires host graphics and built fonts')
-@pytest.mark.parametrize('variant,expected', [('tici', 14), ('mici', 4)])
+@pytest.mark.parametrize('variant,expected', [('tici', 17), ('mici', 7)])
 def test_ui_screenshots(variant, expected, tmp_path):
   from PIL import Image, ImageChops
   from openpilot.common.basedir import BASEDIR

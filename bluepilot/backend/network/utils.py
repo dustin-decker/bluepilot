@@ -11,18 +11,20 @@ from bluepilot.backend.utils.params_fallback import get_params_with_defaults
 logger = logging.getLogger(__name__)
 
 params = get_params_with_defaults({
-    "IsOnRoad": False,
+    "IsOnroad": True,
     "BPPortalPort": "8088",
     "EnableWebRoutesServer": True,
 })
 
 
-def is_onroad():
+def is_onroad() -> bool:
     """Check if vehicle is currently driving"""
     try:
-        return params.get_bool("IsOnRoad")
-    except:
-        return False
+        state = params.get("IsOnroad")
+        return not (state is False or state in (b"0", "0", "False"))
+    except Exception:
+        logger.exception("Cannot read driving state; treating the vehicle as onroad")
+        return True
 
 
 def should_server_run():

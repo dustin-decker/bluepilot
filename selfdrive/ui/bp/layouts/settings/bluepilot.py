@@ -12,6 +12,7 @@ from openpilot.system.ui.lib.multilang import tr
 from openpilot.system.ui.lib.wifi_manager import WifiManager, Network
 from openpilot.selfdrive.ui.ui_state import ui_state
 from openpilot.selfdrive.ui.bp.lib.calibration_reset import prompt_steering_reset, steering_learning_description
+from openpilot.selfdrive.ui.bp.lib.learned_stops import choose_mode, open_review
 from openpilot.selfdrive.ui.bp.widgets.float_control_item import float_control_item, int_control_item
 from openpilot.selfdrive.ui.bp.widgets.section_header import CollapsibleSectionHeader
 from openpilot.selfdrive.ui.bp.lib.steering_wheel_style import (
@@ -846,6 +847,8 @@ class BluePilotLayout(Widget):
         self._hybrid_gauge_style_btn,
       ]) +
       _section(tr("Longitudinal Tuning"), [
+        button_item('Learned Stops', 'MODE', 'Observe learns approaches; you control braking. Control requires physical validation.', callback=choose_mode),
+        button_item('Review Learned Stops', 'OPEN', 'Scan the QR code to review route evidence in the Portal.', callback=open_review),
         self._disable_BP_long,
         self._disable_dowhill_comp,
         self._disable_ford_radar,

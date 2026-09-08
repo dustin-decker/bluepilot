@@ -11,6 +11,7 @@ Then open http://localhost:8088 in your browser
 
 import sys
 import os
+from typing import Any
 
 # Add project root to path
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
@@ -23,35 +24,35 @@ except ImportError:
 
     class MockParams:
         """Mock Params class for local testing"""
-        def __init__(self):
-            self._params = {
-                "IsOnRoad": b"0",
+        def __init__(self) -> None:
+            self._params: dict[str, bytes] = {
+                "IsOnroad": b"0",
                 "BPPortalPort": b"8088"
             }
 
-        def get_bool(self, key):
+        def get_bool(self, key: str) -> bool:
             value = self._params.get(key, b"0")
             if isinstance(value, bytes):
                 return value == b"1"
             return bool(value)
 
-        def get(self, key, encoding='utf-8'):
+        def get(self, key: str, encoding: str | None = 'utf-8') -> str | bytes:
             value = self._params.get(key, b"")
             if encoding:
                 return value.decode(encoding) if isinstance(value, bytes) else str(value)
             return value
 
-        def put(self, key, value):
+        def put(self, key: str, value: str | bytes) -> None:
             if isinstance(value, str):
                 value = value.encode()
             self._params[key] = value
 
-        def put_bool(self, key, value):
+        def put_bool(self, key: str, value: bool) -> None:
             self._params[key] = b"1" if value else b"0"
 
     # Replace in sys.modules
     import types
-    common = types.ModuleType('common')
+    common: Any = types.ModuleType('common')
     common.params = types.ModuleType('params')
     common.params.Params = MockParams
     sys.modules['common'] = common

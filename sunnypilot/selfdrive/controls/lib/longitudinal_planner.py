@@ -84,9 +84,17 @@ class LongitudinalPlannerSP:
     plan_sp_send.valid = sm.all_checks(service_list=['carState', 'controlsState'])
 
     longitudinalPlanSP = plan_sp_send.longitudinalPlanSP
+    # BluePilot: record the proposed/applied stop constraint independently of model output.
+    longitudinalPlanSP.learnedStops = getattr(self, "learned_stops_status", "")
+    # End BluePilot
     longitudinalPlanSP.longitudinalPlanSource = self.source
     longitudinalPlanSP.vTarget = float(self.output_v_target)
     longitudinalPlanSP.aTarget = float(self.output_a_target)
+    # BluePilot: request driver takeover without silently releasing a stop hold.
+    learned_stops = getattr(self, 'learned_stops', None)
+    if learned_stops and learned_stops.state.get('takeover'):
+      self.events_sp.add(custom.OnroadEventSP.EventName.learnedStopTakeover)
+    # End BluePilot
     longitudinalPlanSP.events = self.events_sp.to_msg()
 
     # Dynamic Experimental Control

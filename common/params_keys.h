@@ -314,6 +314,7 @@ inline static std::unordered_map<std::string, ParamKeyAttributes> keys = {
     {"FordLowSpeedFactor_ang", {PERSISTENT | BACKUP, FLOAT, "1.0"}},
     {"FordHighSpeedFactor_ang", {PERSISTENT | BACKUP, FLOAT, "1.0"}},
     {"FordHighSpeedDampening_ang", {PERSISTENT | BACKUP, FLOAT, "1.0"}},
+    {"BPLearnedStopsLatch", {CLEAR_ON_ONROAD_TRANSITION, STRING}}, // BluePilot: restart-safe stop hold within ignition
     {"FordAngleAutoCal", {PERSISTENT | BACKUP, BOOL, "0"}},           // one-time auto-calibration of the angle speed factors
     {"FordAngleAutoCalState", {PERSISTENT | BACKUP, STRING}},         // missing/empty = collecting; JSON = evidence; "locked"/"done ..." = finished
     {"FordAngleAutoCalError", {PERSISTENT, STRING}},                  // diagnostics only — separate channel so an error can never clobber evidence

@@ -197,6 +197,8 @@ if is_bluepilot():
   def _bp_route_preprocessor_enabled(started, params, CP):
     return params.get_bool("EnableWebRoutesServer") and only_offroad(started, params, CP)
   procs += [
+    PythonProcess("bp_learned_stops", "bluepilot.learned_stops.daemon", only_onroad, restart_if_crash=True),
+    PythonProcess("bp_stop_evidence", "bluepilot.learned_stops.evidence", only_offroad),
     PythonProcess("bp_portal", "bluepilot.backend.bp_portal", _bp_portal_enabled),
     PythonProcess("bp_route_preprocessor", "bluepilot.backend.routes.preprocessor", _bp_route_preprocessor_enabled),
   ]

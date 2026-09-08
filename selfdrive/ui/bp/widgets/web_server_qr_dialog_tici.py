@@ -15,8 +15,9 @@ from openpilot.system.ui.widgets.toggle import Toggle
 class WebServerQRDialogTici(Widget):
   """Dialog showing QR code for webserver access and toggle to disable (TICI version)."""
 
-  def __init__(self):
+  def __init__(self, path: str = "") -> None:
     super().__init__()
+    self._path = path
     self.set_rect(rl.Rectangle(0, 0, gui_app.width, gui_app.height))
     self._params = Params()
     self._qr_texture: rl.Texture | None = None
@@ -77,7 +78,7 @@ class WebServerQRDialogTici(Widget):
       port = port_raw.decode("utf-8") if isinstance(port_raw, bytes) else str(port_raw)
     except Exception:
       port = "8088"
-    return f"http://{wifi_ip}:{port}"
+    return f"http://{wifi_ip}:{port}{self._path}"
 
   def _generate_qr_code(self) -> None:
     """Generate QR code texture from server URL."""

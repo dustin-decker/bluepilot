@@ -291,6 +291,9 @@ export const Home = ({ deviceStatus = 'checking' }: HomeProps) => {
               <h2>Quick Access</h2>
             </div>
             <div className="quick-links-grid">
+              <button className="quick-link-card routes" disabled={deviceStatus !== 'online'} onClick={() => navigate('/learned-stops')}>
+                <div className="quick-link-copy"><span className="label">Learned Stops</span><span className="description">Review approaches and stopping evidence</span></div>
+              </button>
               <button
                 className={`quick-link-card routes ${deviceStatus === 'onroad' ? 'disabled' : ''}`}
                 onClick={() => deviceStatus !== 'onroad' && navigate('/routes')}

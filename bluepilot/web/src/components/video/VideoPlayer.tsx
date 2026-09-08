@@ -21,9 +21,12 @@ import './VideoPlayer.css'
 interface VideoPlayerProps {
   route: RouteDetails
   onClose: () => void
+  initialSegment?: number
 }
 
-export const VideoPlayer: React.FC<VideoPlayerProps> = ({ route, onClose }) => {
+export const VideoPlayer: React.FC<VideoPlayerProps> = ({ route, onClose, initialSegment = 0 }) => {
+  const initialIndex = Math.max(0, route.segments.findIndex(s => s.number === initialSegment))
+  const initialTime = route.segments.slice(0, initialIndex).reduce((seconds, s) => seconds + (s.videos.front?.duration || s.videos.lq?.duration || 60), 0)
   const navigate = useNavigate()
   const { deleteRoute, preserveRoute } = useRoutesStore()
   const { addToast } = useToastStore()
@@ -35,8 +38,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ route, onClose }) => {
   const videoWrapperRef = useRef<HTMLDivElement>(null)
 
   const [currentCamera, setCurrentCamera] = useState<CameraType>('front')
-  const [currentSegment, setCurrentSegment] = useState(0)
-  const [currentTime, setCurrentTime] = useState(0)
+  const [currentSegment, setCurrentSegment] = useState(initialIndex)
+  const [currentTime, setCurrentTime] = useState(initialTime)
   const [buffering, setBuffering] = useState(false)
   const [showDebugPanel, setShowDebugPanel] = useState(false)
   const [showReplayOverlay, setShowReplayOverlay] = useState(false)
@@ -49,12 +52,12 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ route, onClose }) => {
   const h265PlayerRef = useRef<any>(null)
   const retryCountRef = useRef(0)
   const maxRetries = 3
-  const lastPlaybackTimeRef = useRef(0)
+  const lastPlaybackTimeRef = useRef(initialTime)
   const bufferErrorCountRef = useRef(0)
   const MAX_BUFFER_ERRORS = 5
   const canvasTimeIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const canvasStartTimeRef = useRef<number>(0)
-  const currentSegmentRef = useRef(0)
+  const currentSegmentRef = useRef(initialIndex)
 
   // Detect browser capabilities on mount
   useEffect(() => {

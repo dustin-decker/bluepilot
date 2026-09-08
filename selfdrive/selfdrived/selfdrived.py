@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
+from __future__ import annotations
+
 import os
 import time
 import threading
+from typing import Any
 
 import cereal.messaging as messaging
 
@@ -58,7 +61,7 @@ COMM_ISSUE_DEBOUNCE_FRAMES = 20
 
 
 class SelfdriveD(CruiseHelper):
-  def __init__(self, CP=None, CP_SP=None):
+  def __init__(self, CP: car.CarParams | None = None, CP_SP: custom.CarParamsSP | None = None) -> None:
     self.params = Params()
 
     # Ensure the current branch is cached, otherwise the first cycle lags
@@ -139,7 +142,7 @@ class SelfdriveD(CruiseHelper):
     self.last_steering_pressed_frame = 0
     self.distance_traveled = 0
     self.last_functional_fan_frame = 0
-    self.events_prev = []
+    self.events_prev: list[Any] = []
     self.logged_comm_issue = None
     self.not_running_prev = None
     self.experimental_mode = False
@@ -156,6 +159,10 @@ class SelfdriveD(CruiseHelper):
     self.rk = Ratekeeper(100, print_delay_threshold=None)
 
     self.ignored_processes = {'mapd', }
+    # BluePilot: optional stop observation/evidence must not disengage ordinary
+    # driving. The planner handles stale stop messages and retains any active hold.
+    self.ignored_processes.update({'bp_learned_stops', 'bp_stop_evidence'})
+    # End BluePilot
 
     # Determine startup event
     is_remote = build_metadata.openpilot.comma_remote or build_metadata.openpilot.sunnypilot_remote
@@ -176,7 +183,7 @@ class SelfdriveD(CruiseHelper):
       self.events.add(EventName.dashcamMode, static=True)
 
     self.events_sp = EventsSP()
-    self.events_sp_prev = []
+    self.events_sp_prev: list[Any] = []
 
     self.mads = ModularAssistiveDrivingSystem(self)
     self.icbm = IntelligentCruiseButtonManagement(self.CP, self.CP_SP)

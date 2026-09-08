@@ -32,6 +32,7 @@ import re
 import asyncio
 import threading
 import requests
+from typing import Any
 
 try:
     import psutil
@@ -846,7 +847,7 @@ class WebRoutesHandler(BaseHTTPRequestHandler):
         self.send_cors_headers()
         self.end_headers()
 
-    def do_GET(self):
+    def do_GET(self) -> None:
         """Handle GET requests"""
         try:
             parsed = urlparse(self.path)
@@ -896,11 +897,15 @@ class WebRoutesHandler(BaseHTTPRequestHandler):
 
             # SPA routes - serve index.html for frontend routes
             # This allows direct navigation and page refresh to work
-            SPA_ROUTES = {'/', '/index.html', '/settings', '/parameters', '/routes', '/logs'}
+            SPA_ROUTES = {'/', '/index.html', '/settings', '/parameters', '/routes', '/logs', '/learned-stops'}
 
             # Route handlers
             if path in SPA_ROUTES or path.startswith('/settings/'):
                 self.send_file_response(str(WEBAPP_DIR / 'index.html'), 'text/html')
+                return
+
+            from bluepilot.learned_stops.api import handle as handle_learned_stops
+            if handle_learned_stops(self, path, 'GET', is_onroad):
                 return
 
             # API routes - separate if/elif chain since SPA routes return early
@@ -2116,14 +2121,14 @@ class WebRoutesHandler(BaseHTTPRequestHandler):
                 # Get current device state for panel conditionals
                 try:
                     # Helper function to safely get boolean params
-                    def safe_get_bool(key, default=False):
+                    def safe_get_bool(key: str, default: bool = False) -> bool:
                         try:
                             return params.get_bool(key)
                         except Exception:
                             return default
 
                     # Helper function to safely check if param exists and has value
-                    def param_exists(key):
+                    def param_exists(key: str) -> bool:
                         try:
                             val = params.get(key)
                             return val is not None and val != b''
@@ -2133,7 +2138,7 @@ class WebRoutesHandler(BaseHTTPRequestHandler):
                     onroad = is_onroad()
 
                     # Basic state
-                    state = {
+                    state: dict[str, Any] = {
                         'isOnroad': onroad,
                         'isOffroad': not onroad,
                         'hasCarParams': param_exists("CarParams"),
@@ -2208,7 +2213,7 @@ class WebRoutesHandler(BaseHTTPRequestHandler):
                     all_params = get_all_params(params)
 
                     # Filter to only params with BACKUP attribute and extract their values
-                    backup_data = {}
+                    backup_data: dict[str, Any] = {}
                     backup_keys = []
 
                     for key, param_entry in all_params.items():
@@ -2305,7 +2310,7 @@ class WebRoutesHandler(BaseHTTPRequestHandler):
                             logger.info(f"Using cached drive stats: {all_routes} routes, {all_distance} miles, {all_minutes} minutes")
                             # Parse response (format: {all: {routes, distance, minutes}, week: {...}})
                             # Convert both "all" and "week" stats to frontend format
-                            def convert_stats(stats_data):
+                            def convert_stats(stats_data: dict[str, Any]) -> dict[str, Any]:
                                 """Convert API stats to frontend format"""
                                 distance_miles = stats_data.get('distance', 0)
                                 distance_meters = distance_miles * 1609.34
@@ -2386,7 +2391,7 @@ class WebRoutesHandler(BaseHTTPRequestHandler):
                                     logger.info(f"Successfully fetched drive stats from Comma API: {api_data.get('all', {}).get('routes', 0)} routes")
                                     
                                     # Parse and return the data
-                                    def convert_api_stats(stats_data):
+                                    def convert_api_stats(stats_data: dict[str, Any]) -> dict[str, Any]:
                                         """Convert API stats to frontend format"""
                                         distance_miles = stats_data.get('distance', 0)
                                         distance_meters = distance_miles * 1609.34
@@ -2489,7 +2494,7 @@ class WebRoutesHandler(BaseHTTPRequestHandler):
                                     logger.debug(f"Could not parse route timestamp {route_timestamp}: {e}")
                         
                         # Convert to frontend format
-                        def convert_calculated_stats(stats_data):
+                        def convert_calculated_stats(stats_data: dict[str, Any]) -> dict[str, Any]:
                             """Convert calculated stats to frontend format"""
                             distance_miles = stats_data.get('distance', 0)
                             distance_meters = distance_miles * 1609.34
@@ -2557,9 +2562,9 @@ class WebRoutesHandler(BaseHTTPRequestHandler):
                 # Get file content for FileViewer control
                 try:
                     query_params = parse_qs(parsed.query)
-                    file_path = query_params.get('path', [None])[0]
+                    requested_path = query_params.get('path', [None])[0]
 
-                    if not file_path:
+                    if not requested_path:
                         self.send_json_response({'success': False, 'error': 'Missing path parameter'}, 400)
                         return
 
@@ -2572,11 +2577,11 @@ class WebRoutesHandler(BaseHTTPRequestHandler):
                     ]
 
                     # Resolve to absolute path and check if it's within allowed directories
-                    if not os.path.isabs(file_path):
+                    if not os.path.isabs(requested_path):
                         # If relative path, assume it's relative to /data/openpilot
-                        file_path = os.path.join('/data/openpilot', file_path)
+                        requested_path = os.path.join('/data/openpilot', requested_path)
 
-                    abs_path = os.path.abspath(file_path)
+                    abs_path = os.path.abspath(requested_path)
 
                     # Check if path is in allowed directories
                     is_allowed = any(abs_path.startswith(allowed_dir) for allowed_dir in allowed_dirs)
@@ -2661,10 +2666,10 @@ class WebRoutesHandler(BaseHTTPRequestHandler):
 
             else:
                 # Serve static files or SPA routes
-                file_path = WEBAPP_DIR / path.lstrip('/')
-                if file_path.exists() and file_path.is_file():
+                web_file_path = WEBAPP_DIR / path.lstrip('/')
+                if web_file_path.exists() and web_file_path.is_file():
                     # Serve static file (JS, CSS, images, etc.)
-                    self.send_file_response(str(file_path))
+                    self.send_file_response(str(web_file_path))
                 else:
                     # Serve index.html for SPA routes (e.g., /routes, /parameters, /settings)
                     # This allows React Router to handle client-side routing
@@ -2766,7 +2771,7 @@ class WebRoutesHandler(BaseHTTPRequestHandler):
                 'details': str(e)
             }, 500)
 
-    def do_POST(self):
+    def do_POST(self) -> None:
         """Handle POST requests"""
         try:
             parsed = urlparse(self.path)
@@ -2895,6 +2900,10 @@ class WebRoutesHandler(BaseHTTPRequestHandler):
                     }, 503)
                     return
 
+            from bluepilot.learned_stops.api import handle as handle_learned_stops
+            if handle_learned_stops(self, path, 'POST', is_onroad):
+                return
+
             # Cancel export operations
             if path.startswith('/api/route-export/') and path.endswith('/cancel'):
                 parts = path.split('/')[3:]
@@ -2963,7 +2972,7 @@ class WebRoutesHandler(BaseHTTPRequestHandler):
                 info = server_state.update_route_export(key, progress=0.05, message="Preparing route video")
                 broadcast_route_export_update(route_base, camera, info)
 
-                def progress_callback(progress, message):
+                def progress_callback(progress: float, message: str) -> None:
                     try:
                         progress_value = max(0.0, min(1.0, float(progress)))
                     except (TypeError, ValueError):
@@ -2971,7 +2980,7 @@ class WebRoutesHandler(BaseHTTPRequestHandler):
                     info = server_state.update_route_export(key, progress=progress_value, message=message)
                     broadcast_route_export_update(route_base, camera, info)
 
-                def worker():
+                def worker() -> None:
                     try:
                         export_path_local = generate_route_export(route_base, camera, progress_callback, server_state)
                         info = server_state.complete_route_export(key, export_path_local, message="Video ready")
@@ -3047,8 +3056,8 @@ class WebRoutesHandler(BaseHTTPRequestHandler):
                         }, 400)
                         return
 
-                    body = self.rfile.read(content_length).decode('utf-8')
-                    data = json.loads(body)
+                    params_body = self.rfile.read(content_length).decode('utf-8')
+                    data = json.loads(params_body)
 
                     param_key = data.get('key')
                     param_value = data.get('value')
@@ -3103,8 +3112,8 @@ class WebRoutesHandler(BaseHTTPRequestHandler):
                         }, 400)
                         return
 
-                    body = self.rfile.read(content_length).decode('utf-8')
-                    data = json.loads(body)
+                    bulk_params_body = self.rfile.read(content_length).decode('utf-8')
+                    data = json.loads(bulk_params_body)
 
                     params_data = data.get('params', {})
 
@@ -3185,8 +3194,8 @@ class WebRoutesHandler(BaseHTTPRequestHandler):
                         }, 400)
                         return
 
-                    body = self.rfile.read(content_length).decode('utf-8')
-                    data = json.loads(body)
+                    favorites_body = self.rfile.read(content_length).decode('utf-8')
+                    data = json.loads(favorites_body)
 
                     favorites = data.get('favorites')
                     if favorites is None:
@@ -3232,8 +3241,8 @@ class WebRoutesHandler(BaseHTTPRequestHandler):
                         }, 400)
                         return
 
-                    body = self.rfile.read(content_length).decode('utf-8')
-                    data = json.loads(body)
+                    command_body = self.rfile.read(content_length).decode('utf-8')
+                    data = json.loads(command_body)
 
                     action = data.get('action')
                     param = data.get('param')
@@ -3378,8 +3387,8 @@ class WebRoutesHandler(BaseHTTPRequestHandler):
                                 }, 500)
                         else:
                             # Return current state
-                            current_username = params.get('GithubUsername', encoding='utf-8')
-                            current_keys = params.get('GithubSshKeys', encoding='utf-8')
+                            current_username = params.get('GithubUsername')
+                            current_keys = params.get('GithubSshKeys')
                             has_keys = bool(current_keys)
 
                             self.send_json_response({

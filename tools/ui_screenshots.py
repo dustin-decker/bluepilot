@@ -64,6 +64,28 @@ def render(variant: str, output: Path) -> None:
         finally:
           gui_app.push_widget = push_widget
 
+        from openpilot.selfdrive.ui.bp.lib import learned_stops
+        from cereal import log
+        import time
+        os.environ['BP_LEARNED_STOPS_ROOT'] = str(output / 'isolated-stops')
+        learned_stops.ui_state = SimpleNamespace(started=False, engaged=False, params=SimpleNamespace(get_bool=lambda _: False))
+        try:
+          gui_app.push_widget = dialogs.append
+          learned_stops.choose_mode()
+          snapshot('stops-mode', lambda: dialogs[-1].render(rl.Rectangle(0, 0, width, height)))
+        finally:
+          gui_app.push_widget = push_widget
+        class StopMessages(dict):
+          services = ['longitudinalPlanSP', 'selfdriveState']
+          valid = dict.fromkeys(services, True)
+          logMonoTime = {'longitudinalPlanSP': int(time.monotonic() * 1e9)}
+        messages = StopMessages(longitudinalPlanSP=SimpleNamespace(learnedStops=''), selfdriveState=log.SelfdriveState.new_message())
+        learned_stops.ui_state.sm = messages
+        for name, distance in [('learning', None), ('approach', 175)]:
+          messages['longitudinalPlanSP'].learnedStops = json.dumps({'mode': 'observe', 'state': name, 'distance': distance})
+          indicator = learned_stops.StopIndicator()
+          snapshot('stops-' + name, lambda indicator=indicator: indicator.render(rl.Rectangle(0, 0, width, height), compact=variant == 'mici'))
+
         if variant == 'mici':
           from openpilot.selfdrive.ui.sunnypilot.mici.layouts.models import CurrentModelInfo
           from openpilot.system.ui.widgets.label import ScrollState

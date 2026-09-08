@@ -1,6 +1,7 @@
 """Runtime settings and short AutoCal transitions survive the real Cereal publisher."""
 import json
 from types import SimpleNamespace
+from typing import Any, cast
 
 from cereal import log
 from opendbc.sunnypilot.car.ford.angle_autocal_controller import AutoCalController
@@ -9,7 +10,7 @@ from opendbc.sunnypilot.car.ford.tests.test_angle_autocal import _MockParams
 from openpilot.bluepilot.selfdrive.car import bp_card_publisher as publisher
 
 
-def test_autocal_events_survive_reset_and_publish(monkeypatch):
+def test_autocal_events_survive_reset_and_publish(monkeypatch: Any) -> None:
   p = _MockParams({'FordAngleAutoCal': True, 'FordAngleAutoCalLock': False, 'FordAngleAutoCalState': ''})
   ctl = AutoCalController(.05)
   ctl.poll_params(p, 1.13, 1., .95)
@@ -38,9 +39,9 @@ def test_autocal_events_survive_reset_and_publish(monkeypatch):
   monkeypatch.setattr(publisher, '_refresh_settings_cache', lambda: stale)
   monkeypatch.setattr(publisher, '_settings_cache', {})
   monkeypatch.setattr(publisher, '_settings_last_read', 0.)
-  publisher.publish_controller_state_bp(ci, pm)
+  publisher.publish_controller_state_bp(ci, cast(Any, pm))
   smoother.configure(True, 2.)
-  publisher.publish_controller_state_bp(ci, pm)
+  publisher.publish_controller_state_bp(ci, cast(Any, pm))
   for index, raw in enumerate(captured):
     with log.Event.from_bytes(raw) as event:
       state = event.controllerStateBP
@@ -55,7 +56,7 @@ def test_autocal_events_survive_reset_and_publish(monkeypatch):
       assert json.loads(state.angleAutoCalEvents)['events'] == events
 
 
-def test_event_history_is_bounded_and_errors_are_recorded():
+def test_event_history_is_bounded_and_errors_are_recorded() -> None:
   ctl = AutoCalController(.05)
   for i in range(30):
     ctl.record_settings(low=1. + i/100)
@@ -68,7 +69,7 @@ def test_event_history_is_bounded_and_errors_are_recorded():
   assert events[-1]['kind'] == 'error'
 
 
-def test_event_bursts_survive_qlog_and_deduplicate_errors():
+def test_event_bursts_survive_qlog_and_deduplicate_errors() -> None:
   ctl = AutoCalController(.05)
   ctl.record_event('arm')
   ctl._error('repeated failure')

@@ -1167,6 +1167,7 @@ struct LongitudinalPlan @0xe00b5b3eba12876c {
     lead1 @2;
     lead2 @3;
     e2e @4;
+    learnedStop @5;  # BluePilot: stationary stop constraint
   }
 
 
@@ -2563,7 +2564,7 @@ struct Event {
     customReserved12 @138 :Custom.CustomReserved12;
     controllerStateBP @139 :Custom.ControllerStateBP;  # BluePilot: claims customReserved13 slot
     carStateBP @140 :Custom.CarStateBP;  # BluePilot: claims customReserved14 slot
-    customReserved15 @141 :Custom.CustomReserved15;
+    learnedStopsBP @141 :Custom.LearnedStopsBP;  # BluePilot: claims reserved slot
     customReserved16 @142 :Custom.CustomReserved16;
     customReserved17 @143 :Custom.CustomReserved17;
     customReserved18 @144 :Custom.CustomReserved18;

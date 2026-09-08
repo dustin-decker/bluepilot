@@ -202,6 +202,7 @@ struct LongitudinalPlanSP @0xf35cc4560bbf6ec2 {
   aTarget @5 :Float32;
   events @6 :List(OnroadEventSP.Event);
   e2eAlerts @7 :E2eAlerts;
+  learnedStops @8 :Text;  # BluePilot: versioned stopping decision telemetry
 
   struct DynamicExperimentalControl {
     state @0 :DynamicExperimentalControlState;
@@ -350,6 +351,7 @@ struct OnroadEventSP @0xda96579883444c35 {
     speedLimitChanged @21;
     speedLimitPending @22;
     e2eChime @23;
+    learnedStopTakeover @24;
   }
 }
 
@@ -613,7 +615,8 @@ struct CarStateBP @0xb057204d7deadf3f {
   }
 }
 
-struct CustomReserved15 @0xbd443b539493bc68 {
+struct LearnedStopsBP @0xbd443b539493bc68 {
+  data @0 :Text;  # BluePilot: versioned observation/matched-target snapshot
 }
 
 struct CustomReserved16 @0xfc6241ed8877b611 {

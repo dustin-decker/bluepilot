@@ -6,6 +6,7 @@ from openpilot.selfdrive.ui.onroad.hud_renderer import UI_CONFIG, FONT_SIZES, CO
 from openpilot.selfdrive.ui.sunnypilot.onroad.hud_renderer import HudRendererSP
 from openpilot.selfdrive.ui.bp.onroad.exp_button_bp import ExpButtonBP
 from openpilot.selfdrive.ui.bp.lib.live_delay_indicator import LiveDelayIndicator
+from openpilot.selfdrive.ui.bp.lib.learned_stops import StopIndicator
 from openpilot.selfdrive.ui.ui_state import ui_state
 from openpilot.system.ui.lib.text_measure import measure_text_cached
 from openpilot.selfdrive.ui.bp.lib.ui_debug_logger import bp_ui_log
@@ -25,12 +26,13 @@ class HudRendererBP(HudRendererSP):
   repositioning above the battery/power flow gauges.
   """
 
-  def __init__(self):
+  def __init__(self) -> None:
     super().__init__()
     # BluePilot: Restore the animated C3X wheel without modifying the upstream ExpButton.
     self._exp_button = ExpButtonBP(UI_CONFIG.button_size, UI_CONFIG.wheel_icon_size)
     self._bp_params = Params()
     self._live_delay = LiveDelayIndicator(width=140)
+    self._stops = StopIndicator()
     self._brakes_on = False
     self.speed_right = 0
     self._gradient_rect = None  # BluePilot: Full-width rect for header gradient
@@ -95,6 +97,7 @@ class HudRendererBP(HudRendererSP):
     if self.is_cruise_available:
       self._draw_set_speed(rect)
     self._draw_current_speed(rect)
+    self._stops.render(rect)
 
     button_x = rect.x + rect.width - UI_CONFIG.border_size - UI_CONFIG.button_size
     button_y = rect.y + UI_CONFIG.border_size

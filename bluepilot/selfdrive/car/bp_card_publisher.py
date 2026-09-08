@@ -6,6 +6,7 @@ card.py only needs a single function call instead of inline BP blocks.
 """
 
 import time
+from typing import Any
 
 import cereal.messaging as messaging
 from opendbc.car import structs
@@ -14,7 +15,7 @@ from openpilot.selfdrive.car.helpers import convert_to_capnp
 
 _SETTINGS_INTERVAL = 5.0  # re-read params at most every 5 s
 _settings_last_read: float = 0.0
-_settings_cache: dict = {}
+_settings_cache: dict[str, bool | float | int | str] = {}
 
 
 def _get_bool(p: Params, key: str, default: bool = False) -> bool:
@@ -58,7 +59,7 @@ def _get_str(p: Params, key: str, default: str = "") -> str:
     return default
 
 
-def _refresh_settings_cache() -> dict:
+def _refresh_settings_cache() -> dict[str, bool | float | int | str]:
   """BluePilot-menu settings snapshot -- see custom.capnp ControllerStateBP for the field-by-field
   param-key mapping and the field-retirement convention. Keep this dict's keys in sync with the
   capnp/structs.py bms* field names (1:1, same order, same grouping comments)."""
@@ -123,7 +124,7 @@ def _refresh_settings_cache() -> dict:
   }
 
 
-def publish_controller_state_bp(CI, pm):
+def publish_controller_state_bp(CI: Any, pm: messaging.PubMaster) -> None:
   """Publish controllerStateBP if the car controller reports lateralUncertainty."""
   global _settings_last_read, _settings_cache
   if hasattr(CI.CC, "lateralUncertainty"):

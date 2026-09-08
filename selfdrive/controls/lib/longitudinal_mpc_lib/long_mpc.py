@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
+from __future__ import annotations
+
 import os
 import time
+from typing import Any
 import numpy as np
 from cereal import log
 from opendbc.car.interfaces import ACCEL_MIN, ACCEL_MAX
@@ -220,7 +223,7 @@ class LongitudinalMpc:
     self.reset()
     self.source = LongitudinalPlanSource.cruise
 
-  def reset(self):
+  def reset(self) -> None:
     self.solver.reset()
 
     self.x_sol = np.zeros((N+1, X_DIM))
@@ -239,7 +242,7 @@ class LongitudinalMpc:
     for i in range(N+1):
       self.solver.set(i, 'x', np.zeros(X_DIM))
 
-    self.last_cloudlog_t = 0
+    self.last_cloudlog_t = 0.0
     self.status = False
     self.crash_cnt = 0.0
     self.solution_status = 0
@@ -313,7 +316,8 @@ class LongitudinalMpc:
     lead_xv = self.extrapolate_lead(x_lead, v_lead, a_lead, a_lead_tau)
     return lead_xv
 
-  def update(self, radarstate, v_cruise, personality=log.LongitudinalPersonality.standard):
+  def update(self, radarstate: Any, v_cruise: float, personality: log.LongitudinalPersonality = log.LongitudinalPersonality.standard,
+             stop_distance: float | None = None) -> None:
     t_follow = get_T_FOLLOW(personality)
     v_ego = self.x0[1]
     self.status = radarstate.leadOne.status or radarstate.leadTwo.status
@@ -337,6 +341,15 @@ class LongitudinalMpc:
 
     x_obstacles = np.column_stack([lead_0_obstacle, lead_1_obstacle, cruise_obstacle])
     self.source = MPC_SOURCES[np.argmin(x_obstacles[0])]
+    # BluePilot: account for the existing standstill gap once, without a fake radar lead.
+    if stop_distance is not None:
+      if not np.isfinite(stop_distance) or stop_distance < 0:
+        raise ValueError("Invalid stop distance")
+      obstacle = stop_distance + STOP_DISTANCE
+      if obstacle < np.min(x_obstacles[0]):
+        self.source = LongitudinalPlanSource.learnedStop
+      x_obstacles = np.column_stack([x_obstacles, np.full(N + 1, obstacle)])
+    # End BluePilot
 
     self.yref[:,:] = 0.0
     for i in range(N):
@@ -357,13 +370,16 @@ class LongitudinalMpc:
     else:
       self.crash_cnt = 0
 
-  def run(self):
+  def run(self) -> None:
     for i in range(N+1):
       self.solver.set(i, 'p', self.params[i])
     self.solver.constraints_set(0, "lbx", self.x0)
     self.solver.constraints_set(0, "ubx", self.x0)
 
     self.solution_status = self.solver.solve()
+    # BluePilot: retain solver failures for stop-assistance diagnostics across reset().
+    self.last_solve_status = self.solution_status
+    # End BluePilot
     self.solve_time = float(self.solver.get_stats('time_tot')[0])
     self.time_qp_solution = float(self.solver.get_stats('time_qp')[0])
     self.time_linearization = float(self.solver.get_stats('time_lin')[0])

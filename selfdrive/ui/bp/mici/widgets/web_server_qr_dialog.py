@@ -2,7 +2,7 @@ import pyray as rl
 import qrcode
 import numpy as np
 import subprocess
-from typing import Callable
+from collections.abc import Callable
 
 from openpilot.common.swaglog import cloudlog
 from openpilot.common.params import Params
@@ -15,8 +15,9 @@ from openpilot.selfdrive.ui.mici.widgets.button import BigParamControl
 class WebServerQRDialog(NavWidget):
   """Dialog showing QR code for webserver access and toggle to disable."""
 
-  def __init__(self, back_callback: Callable):
+  def __init__(self, back_callback: Callable[[], None], path: str = "") -> None:
     super().__init__()
+    self._path = path
     self.set_back_callback(back_callback)
     self.set_rect(rl.Rectangle(0, 0, gui_app.width, gui_app.height))
     self._params = Params()
@@ -85,7 +86,7 @@ class WebServerQRDialog(NavWidget):
       port = port_raw.decode("utf-8") if isinstance(port_raw, bytes) else str(port_raw)
     except Exception:
       port = "8088"
-    return f"http://{wifi_ip}:{port}"
+    return f"http://{wifi_ip}:{port}{self._path}"
 
   def _generate_qr_code(self) -> None:
     """Generate QR code texture from server URL."""

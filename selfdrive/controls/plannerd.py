@@ -9,7 +9,7 @@ from openpilot.selfdrive.controls.lib.longitudinal_planner import LongitudinalPl
 import cereal.messaging as messaging
 
 
-def main():
+def main() -> None:
   config_realtime_process(5, Priority.CTRL_LOW)
 
   cloudlog.info("plannerd is waiting for CarParams")
@@ -27,7 +27,8 @@ def main():
   longitudinal_planner = LongitudinalPlanner(CP, CP_SP)
   pm = messaging.PubMaster(['longitudinalPlan', 'driverAssistance', 'longitudinalPlanSP'])
   sm = messaging.SubMaster(['carControl', 'carState', 'controlsState', 'liveParameters', 'radarState', 'modelV2', 'selfdriveState',
-                            'liveMapDataSP', 'carStateSP', gps_location_service],
+                            'liveMapDataSP', 'carStateSP', gps_location_service,
+                            'learnedStopsBP'],  # BluePilot: optional target, excluded from core health checks
                            poll='carState')
 
   while True:

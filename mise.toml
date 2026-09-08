@@ -76,3 +76,19 @@ run = "uv run --extra testing python tools/ford_process_replay.py"
 [tasks."autocal:simulate"]
 description = "Run diagnostic angle-strategy feedback simulation; never choose live settings"
 run = "uv run --extra testing python tools/autocal_simulate.py"
+
+[tasks."stops:build"]
+description = "Build the native MPC solver for offline learned-stop checks"
+run = "uv run scons --minimal -j${BP_BUILD_JOBS:-4} common/params_pyx.so selfdrive/controls/lib/longitudinal_mpc_lib/c_generated_code/acados_ocp_solver_pyx.so"
+
+[tasks."stops:check"]
+description = "Check stop observation, review guards, and diagnostic MPC constraints"
+run = "uv run python -m pytest -q -o addopts='' bluepilot/learned_stops"
+
+[tasks."stops:replay"]
+description = "Replay local rlogs into an isolated stop evidence store"
+run = "uv run python tools/learned_stops.py replay"
+
+[tasks."stops:simulate"]
+description = "Diagnose stop constraints through 70 mph; does not validate Control"
+run = "uv run --extra testing python tools/learned_stops.py simulate"

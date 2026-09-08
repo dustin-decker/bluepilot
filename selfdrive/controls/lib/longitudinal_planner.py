@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
+from __future__ import annotations
+
 import math
+import json
+from typing import Any
 import numpy as np
 
 import cereal.messaging as messaging
@@ -48,10 +52,15 @@ def limit_accel_in_turns(v_ego, angle_steers, a_target, CP):
 
 
 class LongitudinalPlanner(LongitudinalPlannerSP):
-  def __init__(self, CP, CP_SP, init_v=0.0, init_a=0.0, dt=DT_MDL):
+  def __init__(self, CP: Any, CP_SP: Any, init_v: float = 0.0, init_a: float = 0.0, dt: float = DT_MDL) -> None:
     self.CP = CP
     self.mpc = LongitudinalMpc(dt=dt)
     LongitudinalPlannerSP.__init__(self, self.CP, CP_SP, self.mpc)
+    # BluePilot: message-only stop adapter; observation/storage run separately.
+    from openpilot.common.params import Params
+    from openpilot.bluepilot.learned_stops.planner import PlannerStops
+    self.learned_stops = PlannerStops(CP, Params())
+    # End BluePilot
     self.fcw = False
     self.dt = dt
     self.allow_throttle = True
@@ -86,7 +95,7 @@ class LongitudinalPlanner(LongitudinalPlannerSP):
       throttle_prob = 1.0
     return x, v, a, j, throttle_prob
 
-  def update(self, sm):
+  def update(self, sm: Any) -> None:
     LongitudinalPlannerSP.update(self, sm)
 
     if len(sm['carControl'].orientationNED) == 3:
@@ -138,7 +147,15 @@ class LongitudinalPlanner(LongitudinalPlannerSP):
 
     self.mpc.set_weights(prev_accel_constraint, personality=sm['selfdriveState'].personality)
     self.mpc.set_cur_state(self.v_desired_filter.x, self.a_desired)
-    self.mpc.update(sm['radarState'], v_cruise, personality=sm['selfdriveState'].personality)
+    # BluePilot: an optional stationary obstacle, preserving existing lead/FCW behavior.
+    stop = self.learned_stops.update(sm)
+    self.mpc.update(sm['radarState'], v_cruise, personality=sm['selfdriveState'].personality,
+                    stop_distance=stop['distance'] if stop['apply'] else None)
+    if stop['apply'] and self.mpc.last_solve_status:
+      stop['takeover'] = True
+      stop['reason'] = 'solver_failure'
+    self.learned_stops_status = json.dumps(stop, allow_nan=False)
+    # End BluePilot
 
     self.v_desired_trajectory = np.interp(CONTROL_N_T_IDX, T_IDXS_MPC, self.mpc.v_solution)
     self.a_desired_trajectory = np.interp(CONTROL_N_T_IDX, T_IDXS_MPC, self.mpc.a_solution)
@@ -169,6 +186,9 @@ class LongitudinalPlanner(LongitudinalPlannerSP):
       output_a_target = output_a_target_mpc
       self.output_should_stop = output_should_stop_mpc
 
+    # BluePilot: the stop latch cannot release merely because the model wants to go.
+    self.output_should_stop = self.output_should_stop or stop["hold"]
+    # End BluePilot
     for idx in range(2):
       accel_clip[idx] = np.clip(accel_clip[idx], self.prev_accel_clip[idx] - 0.05, self.prev_accel_clip[idx] + 0.05)
     self.output_a_target = np.clip(output_a_target, accel_clip[0], accel_clip[1])

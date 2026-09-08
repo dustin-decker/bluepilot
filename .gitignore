@@ -124,6 +124,7 @@ tools/jotpluggler/layouts/Path_Angle_Analysis.json
 # Local analysis reports, collected evidence, and Serena workspace state.
 /docs/analysis/
 /.serena/
+/bluepilot/web/dev-dist/
 
 # Local AutoCal analysis skill and generated copies.
 /.ruler/skills/analyze-autocal/
