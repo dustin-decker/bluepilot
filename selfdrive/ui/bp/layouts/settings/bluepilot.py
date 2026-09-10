@@ -1,4 +1,6 @@
 
+from typing import Any, cast
+
 from openpilot.common.params import Params
 from openpilot.common.params_pyx import UnknownKeyName
 from openpilot.common.swaglog import cloudlog
@@ -44,7 +46,7 @@ class BluePilotLayout(Widget):
       return default
 
   @staticmethod
-  def _safe_get(params: Params, key: str, default=None):
+  def _safe_get(params: Params, key: str, default: Any = None) -> Any:
     """Get param; return default if key is unknown (e.g. dev environment with reduced params)."""
     try:
       val = params.get(key, return_default=True)
@@ -60,7 +62,7 @@ class BluePilotLayout(Widget):
     than leaving a live-looking control that silently does nothing."""
     return ui_state.CP is None or ui_state.CP.carFingerprint != "FORD_EDGE_MK2"
 
-  def __init__(self):
+  def __init__(self) -> None:
     super().__init__()
     self._params = Params()
 
@@ -113,7 +115,7 @@ class BluePilotLayout(Widget):
 
     ui_state.add_offroad_transition_callback(self._update_toggles)
 
-  def _initialize_items(self):
+  def _initialize_items(self) -> list[Widget]:
     """Initialize all BluePilot menu items."""
 
     # BlueCruise icon on dash toggle
@@ -757,7 +759,7 @@ class BluePilotLayout(Widget):
       self._lane_centering_strength_ang,
     ]
     angle_header = CollapsibleSectionHeader(tr("Angle Tuning"))
-    angle_header.set_items(angle_items)
+    angle_header.set_items(cast(list[Widget], angle_items))
     self._angle_header = angle_header
 
     # Curvature Tuning: nested collapsible sub-section, curvature-mode-only tuning items
@@ -773,7 +775,7 @@ class BluePilotLayout(Widget):
       self._lc_pid_gain,
     ]
     curv_header = CollapsibleSectionHeader(tr("Curvature Tuning"))
-    curv_header.set_items(curv_items)
+    curv_header.set_items(cast(list[Widget], curv_items))
     self._curv_header = curv_header
 
     # Lateral Tuning: outer section. Disable toggle and mode selector up top, then mode-agnostic
@@ -961,43 +963,46 @@ class BluePilotLayout(Widget):
 
   def _on_blinker_pause_changed(self, state: bool) -> None:
     self._toggle_callback(state, "BlinkerPauseLaneChange")
-    self._blinker_min_speed.action_item.set_enabled(state)
+    cast(Any, self._blinker_min_speed.action_item).set_enabled(state)
 
-  def _update_toggles(self, just_toggled: dict | None = None):
+  def _update_toggles(self, just_toggled: dict[str, Any] | None = None) -> None:
     """Update toggle states from params. just_toggled: {param: value} for params we just wrote (avoids refresh race)."""
     ui_state.update_params()
     fresh = just_toggled or {}
 
+    def action(item: Any) -> Any:
+      return cast(Any, item.action_item)
+
     # Refresh toggles from params to mirror external changes (use fresh for params we just wrote)
     for key, item in self._refresh_toggles:
       state = fresh[key] if key in fresh else self._safe_get_bool(ui_state.params, key)
-      item.action_item.set_state(state)
+      action(item).set_state(state)
 
     wheel_style_idx = int(get_steering_wheel_icon_style(ui_state.params, SteeringWheelIconStyle.COMMA_3X))
-    self._wheel_icon_style_btn.action_item.set_selected_button(wheel_style_idx)
+    action(self._wheel_icon_style_btn).set_selected_button(wheel_style_idx)
     dm_style_idx = int(get_dm_icon_style(ui_state.params, DMIconStyle.COMMA_3X))
-    self._dm_icon_style_btn.action_item.set_selected_button(dm_style_idx)
+    action(self._dm_icon_style_btn).set_selected_button(dm_style_idx)
     custom_sound_idx = int(get_custom_sound_selection(ui_state.params))
-    self._custom_sound_selection_btn.action_item.set_selected_button(custom_sound_idx)
+    action(self._custom_sound_selection_btn).set_selected_button(custom_sound_idx)
     custom_sounds_enabled = fresh.get(
       "BPUseCustomSounds", self._safe_get_bool(ui_state.params, "BPUseCustomSounds")
     )
-    self._custom_sound_selection_btn.action_item.set_enabled(
+    action(self._custom_sound_selection_btn).set_enabled(
       custom_sounds_enabled
     )
 
     # Update button enabled states
-    self._radar_overlay_size_btn.action_item.set_enabled(self._safe_get_bool(ui_state.params, "FordPrefShowRadarLeadOverlay"))
+    action(self._radar_overlay_size_btn).set_enabled(self._safe_get_bool(ui_state.params, "FordPrefShowRadarLeadOverlay"))
     try:
       overlay_idx = int(self._safe_get(ui_state.params, "FordPrefRadarOverlaySize") or 1)
     except (TypeError, ValueError):
       overlay_idx = 1
-    self._radar_overlay_size_btn.action_item.set_selected_button(overlay_idx)
+    action(self._radar_overlay_size_btn).set_selected_button(overlay_idx)
     # Hybrid gauge size and style: enable only when power flow gauge is enabled (NOT battery status)
-    self._hybrid_gauge_size_btn.action_item.set_enabled(
+    action(self._hybrid_gauge_size_btn).set_enabled(
       lambda: self._safe_get_bool(ui_state.params, "FordPrefHybridPowerFlow")
     )
-    self._hybrid_gauge_style_btn.action_item.set_enabled(
+    action(self._hybrid_gauge_style_btn).set_enabled(
       lambda: self._safe_get_bool(ui_state.params, "FordPrefHybridPowerFlow")
     )
     try:
@@ -1005,11 +1010,11 @@ class BluePilotLayout(Widget):
     except (TypeError, ValueError):
       gauge_size = 1
     gauge_size = min(gauge_size, 2)  # Clamp old 3-tier values
-    self._hybrid_gauge_size_btn.action_item.set_selected_button(gauge_size - 1)
+    action(self._hybrid_gauge_size_btn).set_selected_button(gauge_size - 1)
     style_idx = GaugeStyle(ui_state.params.get("FordPrefGaugeStyle", return_default=True) or 0)
-    self._hybrid_gauge_style_btn.action_item.set_selected_button(style_idx)
+    action(self._hybrid_gauge_style_btn).set_selected_button(style_idx)
     plat_idx = PrimaryLateralControl(ui_state.params.get("FordPrefLateralControl", return_default=True) or 0)
-    self._primary_lateral_control_btn.action_item.set_selected_button(plat_idx)
+    action(self._primary_lateral_control_btn).set_selected_button(plat_idx)
     custom_prof = fresh.get("custom_profile_curv") if "custom_profile_curv" in fresh else self._safe_get_bool(ui_state.params, "custom_profile_curv")
     lane_pos = (fresh.get("enable_lane_positioning_curv") if "enable_lane_positioning_curv" in fresh
                 else self._safe_get_bool(ui_state.params, "enable_lane_positioning_curv"))
@@ -1019,30 +1024,24 @@ class BluePilotLayout(Widget):
     is_angle = (plat_idx == PrimaryLateralControl.angle)
     is_curv = not is_angle
     # Conditional on BlinkerPauseLaneChange
-    self._blinker_min_speed.action_item.set_enabled(pause_lc)
+    action(self._blinker_min_speed).set_enabled(pause_lc)
     # Angle-mode items: always visible (Angle Tuning section), greyed out when curvature mode is active
-    self._low_speed_curv_factor.action_item.set_enabled(is_angle)
-    self._high_speed_curv_factor.action_item.set_enabled(is_angle)
-    self._high_speed_dampening.action_item.set_enabled(is_angle)
-    self._angle_autocal.action_item.set_enabled(is_angle)
-    self._angle_autocal_lock.action_item.set_enabled(is_angle)
-    self._angle_autocal_erase.action_item.set_enabled(is_angle)
-    self._angle_smoothing.action_item.set_enabled(is_angle)
-    self._angle_smoothing_strength.action_item.set_enabled(is_angle)
-    self._lane_change_factor_high_ang.action_item.set_enabled(is_angle)
-    self._enable_lane_positioning_ang.action_item.set_enabled(is_angle)
-    self._custom_path_offset_ang.action_item.set_enabled(is_angle and lane_pos_ang)
-    self._lane_centering_strength_ang.action_item.set_enabled(is_angle and lane_pos_ang)
+    for item, enabled in ((self._low_speed_curv_factor, is_angle), (self._high_speed_curv_factor, is_angle),
+                          (self._high_speed_dampening, is_angle), (self._angle_autocal, is_angle),
+                          (self._angle_autocal_lock, is_angle), (self._angle_autocal_erase, is_angle),
+                          (self._angle_smoothing, is_angle), (self._angle_smoothing_strength, is_angle),
+                          (self._lane_change_factor_high_ang, is_angle), (self._enable_lane_positioning_ang, is_angle),
+                          (self._custom_path_offset_ang, is_angle and bool(lane_pos_ang)),
+                          (self._lane_centering_strength_ang, is_angle and bool(lane_pos_ang))):
+      action(item).set_enabled(enabled)
     # Curvature-mode items: always visible (Curvature Tuning section), greyed out when angle mode is active
-    self._lane_change_factor_high_curv.action_item.set_enabled(is_curv)
-    self._enable_human_turn_detection.action_item.set_enabled(is_curv)
-    self._enable_lane_positioning.action_item.set_enabled(is_curv)
-    self._custom_path_offset.action_item.set_enabled(is_curv and lane_pos)
-    self._enable_lane_full_mode.action_item.set_enabled(is_curv and lane_pos)
-    self._custom_profile.action_item.set_enabled(is_curv)
-    self._pc_blend_ratio_high_C.action_item.set_enabled(is_curv and custom_prof)
-    self._pc_blend_ratio_low_C.action_item.set_enabled(is_curv and custom_prof)
-    self._lc_pid_gain.action_item.set_enabled(is_curv and lane_pos and custom_prof)
+    for item, enabled in ((self._lane_change_factor_high_curv, is_curv), (self._enable_human_turn_detection, is_curv),
+                          (self._enable_lane_positioning, is_curv), (self._custom_path_offset, is_curv and bool(lane_pos)),
+                          (self._enable_lane_full_mode, is_curv and bool(lane_pos)), (self._custom_profile, is_curv),
+                          (self._pc_blend_ratio_high_C, is_curv and bool(custom_prof)),
+                          (self._pc_blend_ratio_low_C, is_curv and bool(custom_prof)),
+                          (self._lc_pid_gain, is_curv and bool(lane_pos) and bool(custom_prof))):
+      action(item).set_enabled(enabled)
 
   def show_event(self):
     super().show_event()
@@ -1200,7 +1199,7 @@ class BluePilotLayout(Widget):
     )
     gui_app.push_widget(self._theme_dialog)
 
-  def _toggle_angle_autocal(self, state: bool):
+  def _toggle_angle_autocal(self, state: bool) -> None:
     """Arm/disarm the one-time factor auto-calibration; disarming clears a finished
     calibration's lock so re-enabling starts a fresh collection."""
     self._toggle_callback(state, "FordAngleAutoCal")
@@ -1210,7 +1209,7 @@ class BluePilotLayout(Widget):
       except UnknownKeyName:
         pass
 
-  def _erase_angle_autocal(self):
+  def _erase_angle_autocal(self) -> None:
     """Erase calibration memory: evidence, error log, any lock, and the factors back to
     1.00. The params are cleared here for immediate offroad visibility; the onroad
     controller consumes FordAngleAutoCalReset so a mid-drive erase lands within a second."""

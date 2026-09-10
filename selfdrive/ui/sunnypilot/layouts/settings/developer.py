@@ -4,6 +4,7 @@ Copyright (c) 2021-, Haibin Wen, sunnypilot, and a number of other contributors.
 This file is part of sunnypilot and is licensed under the MIT License.
 See the LICENSE.md file in the root directory for more details.
 """
+from typing import Any
 import datetime
 import os
 from pathlib import Path
@@ -35,7 +36,7 @@ class DeveloperLayoutSP(DeveloperLayout):
     for item in self.items:
       self._scroller.add_widget(item)
 
-  def _initialize_items(self):
+  def _initialize_items(self) -> Any:
     self.show_advanced_controls = toggle_item_sp(tr("Show Advanced Controls"),
                                                  tr("Toggle visibility of advanced bluepilot controls.<br>This only changes the visibility of the toggles; " +
                                                     "it does not change the actual enabled/disabled state."), param="ShowAdvancedControls")

@@ -1,6 +1,7 @@
 import os
 import re
 import threading
+from collections.abc import Callable
 from enum import IntEnum
 
 import pyray as rl
@@ -110,7 +111,7 @@ class TrainingGuide(Widget):
 
 
 class TermsPage(Widget):
-  def __init__(self, on_accept=None, on_decline=None):
+  def __init__(self, on_accept: Callable[[], None] | None = None, on_decline: Callable[[], None] | None = None) -> None:
     super().__init__()
     self._on_accept = on_accept
     self._on_decline = on_decline
@@ -147,7 +148,7 @@ class TermsPage(Widget):
 
 
 class DeclinePage(Widget):
-  def __init__(self, back_callback=None):
+  def __init__(self, back_callback: Callable[[], None] | None = None) -> None:
     super().__init__()
     self._text = Label(tr("You must accept the Terms of Service in order to use bluepilot."),
                        font_size=90, font_weight=FontWeight.MEDIUM, text_alignment=rl.GuiTextAlignment.TEXT_ALIGN_LEFT)

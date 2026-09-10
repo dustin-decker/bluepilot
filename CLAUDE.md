@@ -1120,3 +1120,5 @@ Use the maintained helpers: `tools/device.py` (`mise run device:check`, `device:
 For offline calibration and replay, use the `autocal:*` and `tooling:*` mise tasks documented in `docs/analysis-tooling.md`; evolve these helpers as needed. Update the local report as checks finish, distinguish measured/replayed/simulated evidence, and retain failed validation results.
 
 Learned-stop evidence and diagnostic MPC checks use `tools/learned_stops.py` and `stops:*` mise tasks. Evolve these tools as useful; preserve isolated replay stores, offroad evidence processing, and the disabled Control gate until algorithm and physical validation pass.
+
+Type new or changed Python function boundaries and structured internal state; run `mise run types:check` and `types:test` alongside runtime tests. Extend `mypy.ini` coverage as code is touched. Keep `Any` confined to genuinely dynamic Cereal/JSON/test boundaries, retain runtime input validation, and verify native API signatures instead of inventing mock-only methods. The native Params stub is checked by `common/tests/test_params_stub.py`. Do not silence new errors globally to make the gate pass.

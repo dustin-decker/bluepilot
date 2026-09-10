@@ -34,7 +34,7 @@ class BluePilotBigButton(BigButtonBP):
 class BluePilotLayoutMici(NavScroller):
   """Top-level BluePilot settings: System items inline, five sub-panels for the rest."""
 
-  def __init__(self, back_callback: Callable[[], None]):
+  def __init__(self, back_callback: Callable[[], None]) -> None:
     super().__init__()
     self.set_back_callback(back_callback)
     self._params = Params()

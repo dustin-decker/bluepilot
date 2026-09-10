@@ -15,7 +15,7 @@ from openpilot.selfdrive.ui.onroad.driver_state import BTN_SIZE
 from openpilot.selfdrive.ui.sunnypilot.onroad.developer_ui import DeveloperUiState
 
 
-def test_auto_cal_bars_align_below_steering_wheel_button():
+def test_auto_cal_bars_align_below_steering_wheel_button() -> None:
   content_rect = rl.Rectangle(30, 30, 2100, 1020)
 
   bars_rect = auto_cal_bars_rect(content_rect)
@@ -31,7 +31,7 @@ def test_auto_cal_bars_align_below_steering_wheel_button():
 
 @pytest.mark.parametrize('mode', [DeveloperUiState.RIGHT, DeveloperUiState.BOTH])
 @pytest.mark.parametrize('width', [2100, 1800])
-def test_autocal_clears_right_diagnostics_with_sidebar_open_or_closed(mode, width):
+def test_autocal_clears_right_diagnostics_with_sidebar_open_or_closed(mode: DeveloperUiState, width: int) -> None:
   content = rl.Rectangle(30, 30, width, 1020)
   bars = auto_cal_bars_rect(content, mode)
   panel_left = content.x + content.width - 184 - 40

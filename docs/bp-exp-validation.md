@@ -14,6 +14,14 @@ Local checks: 10 reset/progress tests, 48 translation checks, and 16 native widg
 
 Reproduced overlapping lateral controls after opening descriptions and reopening the menu: hidden rows cached a height of zero. ListItem now retains its intrinsic height; Scroller still excludes hidden rows. Stock and SunnyPilot row variants have lifecycle regressions, and native component snapshots cover opening and reopening nested lateral sections. These checks reproduce the overlap; they do not establish that every possible rendering issue is resolved.
 
+## Branch typing and recorder overhead — September 8, 2026
+
+Added/modified Python functions are checked against the `bp-dev-models` shared base, with a clean strict subset and native Params API regression probes. Dynamic Cereal/JSON/UI boundaries remain explicit; this is not a claim that inherited Python is globally strict. Native process import tests catch annotations that cannot be evaluated by Cap'n Proto at runtime.
+
+The Learned Stops recorder caches its library, rejects distant paths before exact matching, matches only for its 10 Hz publications, and reuses decoded messages while checking freshness on every car-state sample. It drains unconflated inputs in 50 ms batches; brief events and frame indices are retained. Stationary retention is bounded after emitting an observation. No steering gains, calibration values or automatic stopping behavior change.
+
+Exact replay of the later stopping segments preserves 852 publications and three observations. A local native-binding replay used 13.9× less recorder-loop CPU, excluding IPC. End-to-end native messaging measurements on the device show a smaller improvement; do not present loop timing as total device savings. Replay is not physical driving validation, and the 10× end-to-end target is not established by these results.
+
 ## Historical validation before removal
 
 Experimental branch on Dustin's fork; checked 2026-09-06. This is not a driving-safety certification.

@@ -10,7 +10,7 @@ PERSONALITY_TO_INT = log.LongitudinalPersonality.schema.enumerants
 
 
 class TogglesLayoutMici(NavScroller):
-  def __init__(self):
+  def __init__(self) -> None:
     super().__init__()
 
     self._personality_toggle = BigMultiParamToggle("driving personality", "LongitudinalPersonality", ["aggressive", "standard", "relaxed"])

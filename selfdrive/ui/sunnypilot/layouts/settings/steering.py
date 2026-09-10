@@ -4,6 +4,7 @@ Copyright (c) 2021-, Haibin Wen, sunnypilot, and a number of other contributors.
 This file is part of sunnypilot and is licensed under the MIT License.
 See the LICENSE.md file in the root directory for more details.
 """
+from typing import Any
 from cereal import car
 from enum import IntEnum
 
@@ -36,7 +37,7 @@ class SteeringLayout(Widget):
     items = self._initialize_items()
     self._scroller = Scroller(items, line_separator=False, spacing=0)
 
-  def _initialize_items(self):
+  def _initialize_items(self) -> Any:
     self._mads_base_desc = tr("Enable the beloved MADS feature. " +
                               "Disable toggle to revert back to stock sunnypilot engagement/disengagement.")
     self._mads_limited_desc = tr("This platform supports limited MADS settings.")

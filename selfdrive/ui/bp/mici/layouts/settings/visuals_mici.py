@@ -26,7 +26,7 @@ from openpilot.system.ui.widgets.scroller import NavScroller
 
 
 class VisualsLayoutMici(NavScroller):
-  def __init__(self, back_callback: Callable[[], None] | None = None):
+  def __init__(self, back_callback: Callable[[], None] | None = None) -> None:
     super().__init__()
     if back_callback is not None:
       self.set_back_callback(back_callback)

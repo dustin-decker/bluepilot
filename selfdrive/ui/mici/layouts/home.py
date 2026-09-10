@@ -33,7 +33,7 @@ class AlertsPill(Widget):
   ICON_OFFSET = 12
   COUNT_OFFSET = 40
 
-  def __init__(self):
+  def __init__(self) -> None:
     super().__init__()
     self.set_rect(rl.Rectangle(0, 0, 104, 52))
 
@@ -126,7 +126,7 @@ class NetworkIcon(Widget):
 
 
 class MiciHomeLayout(Widget):
-  def __init__(self):
+  def __init__(self) -> None:
     super().__init__()
     self._on_settings_click: Callable | None = None
     self._on_alerts_click: Callable | None = None

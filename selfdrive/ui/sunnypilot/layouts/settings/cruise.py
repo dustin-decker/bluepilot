@@ -4,6 +4,7 @@ Copyright (c) 2021-, Haibin Wen, sunnypilot, and a number of other contributors.
 This file is part of sunnypilot and is licensed under the MIT License.
 See the LICENSE.md file in the root directory for more details.
 """
+from typing import Any
 from enum import IntEnum
 
 from openpilot.selfdrive.ui.sunnypilot.layouts.settings.cruise_sub_layouts.speed_limit_settings import SpeedLimitSettingsLayout
@@ -40,7 +41,7 @@ class CruiseLayout(Widget):
     items = self._initialize_items()
     self._scroller = Scroller(items, line_separator=True, spacing=0)
 
-  def _initialize_items(self):
+  def _initialize_items(self) -> Any:
 
     self.icbm_toggle = toggle_item_sp(
       title=tr("Intelligent Cruise Button Management (ICBM) (Alpha)"),

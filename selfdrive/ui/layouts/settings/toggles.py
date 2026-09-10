@@ -1,3 +1,5 @@
+from typing import Any, cast
+
 from cereal import log
 from openpilot.common.params import Params, UnknownKeyName
 from openpilot.system.ui.widgets import Widget
@@ -39,7 +41,7 @@ DESCRIPTIONS = {
 
 
 class TogglesLayout(Widget):
-  def __init__(self):
+  def __init__(self) -> None:
     super().__init__()
     self._params = Params()
     self._is_release = False  # self._params.get_bool("IsReleaseBranch")
@@ -121,13 +123,16 @@ class TogglesLayout(Widget):
         locked = self._params.get_bool(param + "Lock")
       except UnknownKeyName:
         locked = False
-      toggle.action_item.set_enabled(not locked)
+      cast(Any, toggle.action_item).set_enabled(not locked)
 
       # Make description callable for live translation
       additional_desc = ""
       if needs_restart and not locked:
         additional_desc = tr("Changing this setting will restart bluepilot if the car is powered on.")
-      toggle.set_description(lambda og_desc=toggle.description, add_desc=additional_desc: tr(og_desc) + (" " + tr(add_desc) if add_desc else ""))
+      original_description: Any = toggle.description
+      def description(og_desc: Any = original_description, add_desc: str = additional_desc) -> str:
+        return tr(og_desc) + (" " + tr(add_desc) if add_desc else "")
+      toggle.set_description(description)
 
       # track for engaged state updates
       if locked:
@@ -144,11 +149,11 @@ class TogglesLayout(Widget):
 
     ui_state.add_engaged_transition_callback(self._update_toggles)
 
-  def _update_state(self):
+  def _update_state(self) -> None:
     if ui_state.sm.updated["selfdriveState"]:
       personality = PERSONALITY_TO_INT[ui_state.sm["selfdriveState"].personality]
       if personality != ui_state.personality and ui_state.started:
-        self._long_personality_setting.action_item.set_selected_button(personality)
+        cast(Any, self._long_personality_setting.action_item).set_selected_button(personality)
       ui_state.personality = personality
 
   def show_event(self):
@@ -156,8 +161,10 @@ class TogglesLayout(Widget):
     self._scroller.show_event()
     self._update_toggles()
 
-  def _update_toggles(self):
+  def _update_toggles(self) -> None:
     ui_state.update_params()
+    def action(item: Any) -> Any:
+      return cast(Any, item.action_item)
 
     e2e_description = tr(
       "bluepilot defaults to driving in chill mode. Experimental mode enables alpha-level features that aren't ready for chill mode. " +
@@ -173,14 +180,14 @@ class TogglesLayout(Widget):
 
     if ui_state.CP is not None:
       if ui_state.has_longitudinal_control:
-        self._toggles["ExperimentalMode"].action_item.set_enabled(True)
+        action(self._toggles["ExperimentalMode"]).set_enabled(True)
         self._toggles["ExperimentalMode"].set_description(e2e_description)
-        self._long_personality_setting.action_item.set_enabled(True)
+        action(self._long_personality_setting).set_enabled(True)
       else:
         # no long for now
-        self._toggles["ExperimentalMode"].action_item.set_enabled(False)
-        self._toggles["ExperimentalMode"].action_item.set_state(False)
-        self._long_personality_setting.action_item.set_enabled(False)
+        action(self._toggles["ExperimentalMode"]).set_enabled(False)
+        action(self._toggles["ExperimentalMode"]).set_state(False)
+        action(self._long_personality_setting).set_enabled(False)
         self._params.remove("ExperimentalMode")
 
         unavailable = tr("Experimental mode is currently unavailable on this car since the car's stock ACC is used for longitudinal control.")
@@ -202,29 +209,30 @@ class TogglesLayout(Widget):
     # TODO: make a param control list item so we don't need to manage internal state as much here
     # refresh toggles from params to mirror external changes
     for param in self._toggle_defs:
-      self._toggles[param].action_item.set_state(self._params.get_bool(param))
+      action(self._toggles[param]).set_state(self._params.get_bool(param))
 
     # these toggles need restart, block while engaged
     for toggle_def in self._toggle_defs:
       if self._toggle_defs[toggle_def][3] and toggle_def not in self._locked_toggles:
-        self._toggles[toggle_def].action_item.set_enabled(not ui_state.engaged)
+        action(self._toggles[toggle_def]).set_enabled(not ui_state.engaged)
 
-  def _render(self, rect):
+  def _render(self, rect: Any) -> None:
     self._scroller.render(rect)
 
-  def _update_experimental_mode_icon(self):
-    icon = "experimental.png" if self._toggles["ExperimentalMode"].action_item.get_state() else "experimental_white.png"
+  def _update_experimental_mode_icon(self) -> None:
+    action = cast(Any, self._toggles["ExperimentalMode"].action_item)
+    icon = "experimental.png" if action.get_state() else "experimental_white.png"
     self._toggles["ExperimentalMode"].set_icon(icon)
 
-  def _handle_experimental_mode_toggle(self, state: bool):
+  def _handle_experimental_mode_toggle(self, state: bool) -> None:
     confirmed = self._params.get_bool("ExperimentalModeConfirmed")
     if state and not confirmed:
-      def confirm_callback(result: DialogResult):
+      def confirm_callback(result: DialogResult) -> None:
         if result == DialogResult.CONFIRM:
           self._params.put_bool("ExperimentalMode", True, block=True)
           self._params.put_bool("ExperimentalModeConfirmed", True, block=True)
         else:
-          self._toggles["ExperimentalMode"].action_item.set_state(False)
+          cast(Any, self._toggles["ExperimentalMode"].action_item).set_state(False)
         self._update_experimental_mode_icon()
 
       # show confirmation dialog

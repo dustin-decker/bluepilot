@@ -33,7 +33,7 @@ DESCRIPTIONS = {
 
 
 class DeveloperLayout(Widget):
-  def __init__(self):
+  def __init__(self) -> None:
     super().__init__()
     self._params = Params()
     self._is_release = False  # self._params.get_bool("IsReleaseBranch")

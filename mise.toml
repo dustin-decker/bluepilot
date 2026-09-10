@@ -92,3 +92,11 @@ run = "uv run python tools/learned_stops.py replay"
 [tasks."stops:simulate"]
 description = "Diagnose stop constraints through 70 mph; does not validate Control"
 run = "uv run --extra testing python tools/learned_stops.py simulate"
+
+[tasks."types:check"]
+description = "Run strict typed modules and the diff-scoped branch type gate"
+run = "uvx --from mypy==2.3.1 mypy --config-file mypy.ini && uv run python tools/check_branch_types.py"
+
+[tasks."types:test"]
+description = "Prove the type gate rejects the API mistakes behind the engagement crashes"
+run = "uvx --from mypy==2.3.1 python tools/check_type_regressions.py"

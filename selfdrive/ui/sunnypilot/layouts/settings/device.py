@@ -145,14 +145,14 @@ class DeviceLayoutSP(DeviceLayout):
     return f"{header}\n\n{def_str}\n{offrd_str}"
 
   @staticmethod
-  def _reset_settings():
-    def _do_reset(result: int):
+  def _reset_settings() -> None:
+    def _do_reset(result: int) -> None:
       if result == DialogResult.CONFIRM:
         for _key in ui_state.params.all_keys():
           ui_state.params.remove(_key)
         HARDWARE.reboot()
 
-    def _second_confirm(result: int):
+    def _second_confirm(result: int) -> None:
       if result == DialogResult.CONFIRM:
         gui_app.push_widget(ConfirmDialog(
           text=tr("The reset cannot be undone. You have been warned."),

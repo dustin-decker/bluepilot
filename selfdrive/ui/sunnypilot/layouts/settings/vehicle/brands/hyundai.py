@@ -4,6 +4,8 @@ Copyright (c) 2021-, Haibin Wen, sunnypilot, and a number of other contributors.
 This file is part of sunnypilot and is licensed under the MIT License.
 See the LICENSE.md file in the root directory for more details.
 """
+from typing import Any, cast
+
 from openpilot.selfdrive.ui.sunnypilot.layouts.settings.vehicle.brands.base import BrandSettings
 from openpilot.selfdrive.ui.ui_state import ui_state
 from openpilot.system.ui.lib.multilang import tr
@@ -23,10 +25,10 @@ class HyundaiSettings(BrandSettings):
     self.items = [self.longitudinal_tuning_item]
 
   @staticmethod
-  def _on_tuning_selected(index):
+  def _on_tuning_selected(index: int) -> None:
     ui_state.params.put("HyundaiLongitudinalTuning", index)
 
-  def update_settings(self):
+  def update_settings(self) -> None:
     self.alpha_long_available = False
     bundle = ui_state.params.get("CarPlatformBundle")
     if bundle:
@@ -52,8 +54,9 @@ class HyundaiSettings(BrandSettings):
       elif not long_enabled:
         long_tuning_desc = tr("This feature is unavailable because openpilot Longitudinal Control (Alpha) is not enabled.")
 
-    self.longitudinal_tuning_item.action_item.set_enabled(not longitudinal_tuning_disabled)
+    action = cast(Any, self.longitudinal_tuning_item.action_item)
+    action.set_enabled(not longitudinal_tuning_disabled)
     self.longitudinal_tuning_item.set_description(long_tuning_desc)
     self.longitudinal_tuning_item.show_description(True)
-    self.longitudinal_tuning_item.action_item.set_selected_button(tuning_param)
+    action.set_selected_button(tuning_param)
     self.longitudinal_tuning_item.set_visible(self.alpha_long_available)

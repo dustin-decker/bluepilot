@@ -8,6 +8,8 @@ Navigation: pushed via gui_app.push_widget(). Tap anywhere on screen to pop back
 The main layout's standstill/timeout transitions also pop this widget automatically.
 """
 import time
+from collections.abc import Callable
+from typing import Any
 import pyray as rl
 from openpilot.system.ui.widgets import Widget
 from openpilot.system.ui.lib.application import gui_app, FontWeight
@@ -38,7 +40,7 @@ class LateralDebugMici(Widget):
   Actual (carState.steeringAngleDeg). Tap anywhere to dismiss.
   """
 
-  def __init__(self, back_callback):
+  def __init__(self, back_callback: Callable[[], None]) -> None:
     super().__init__()
     # Any tap on this widget pops back to the menu, except taps on the angle-factor adjuster
     self._back_callback = back_callback
@@ -71,15 +73,15 @@ class LateralDebugMici(Widget):
     self._cal_bars = AutoCalBars()
     self._last_cal_poll = 0.0
 
-  def show_event(self):
+  def show_event(self) -> None:
     super().show_event()
     device.set_override_interactive_timeout(_DEBUG_TIMEOUT_S)
 
-  def hide_event(self):
+  def hide_event(self) -> None:
     super().hide_event()
     device.set_override_interactive_timeout(None)
 
-  def _update_state(self):
+  def _update_state(self) -> None:
     sm = ui_state.sm
     if sm is None:
       return
@@ -101,12 +103,12 @@ class LateralDebugMici(Widget):
       self._last_cal_poll = now
       self._cal_bars.update_status(poll_status())
 
-  def _handle_mouse_release(self, mouse_pos):
+  def _handle_mouse_release(self, mouse_pos: Any) -> None:
     if rl.check_collision_point_rec(mouse_pos, self._adjuster_rect):
       return
     self._back_callback()
 
-  def _render(self, rect: rl.Rectangle):
+  def _render(self, rect: rl.Rectangle) -> None:
     # Solid background so camera feed doesn't bleed through
     rl.draw_rectangle(int(rect.x), int(rect.y), int(rect.width), int(rect.height),
                       rl.Color(15, 15, 20, 255))

@@ -1,5 +1,6 @@
 import time
 from enum import IntEnum
+from typing import Any, cast
 import pyray as rl
 from cereal import log
 from openpilot.common.params import Params
@@ -64,7 +65,7 @@ AUTO_CAL_BARS_WIDTH = round(AutoCalBars.WIDTH * AUTO_CAL_SCALE)
 AUTO_CAL_BARS_HEIGHT = round(AutoCalBars.HEIGHT * AUTO_CAL_SCALE)
 
 
-def auto_cal_bars_rect(content_rect: rl.Rectangle, developer_ui=DeveloperUiState.OFF) -> rl.Rectangle:
+def auto_cal_bars_rect(content_rect: rl.Rectangle, developer_ui: DeveloperUiState | None = DeveloperUiState.OFF) -> rl.Rectangle:
   """Center below the wheel, moving left when the right diagnostic panel is visible."""
   button_left = content_rect.x + content_rect.width - UI_BORDER_SIZE - BTN_SIZE
   if developer_ui in (DeveloperUiState.RIGHT, DeveloperUiState.BOTH):
@@ -82,7 +83,7 @@ class AugmentedRoadViewBP(CameraViewBP, AugmentedRoadView, BlindspotRendererMixi
 
   BLIND_SPOT_WIDTH = 250  # Wider for TICI's larger screen
 
-  def __init__(self, *args, **kwargs):
+  def __init__(self, *args: Any, **kwargs: Any) -> None:
     super().__init__(*args, **kwargs)
     self._init_blindspot()
     self._bp_params = Params()
@@ -91,7 +92,7 @@ class AugmentedRoadViewBP(CameraViewBP, AugmentedRoadView, BlindspotRendererMixi
     self.model_renderer = ModelRendererBP()
     self._hud_renderer = HudRendererBP()
     self.alert_renderer = AlertRendererBP()
-    self.driver_state_renderer = DriverStateRendererBP(DMIconStyle.COMMA_3X)
+    self.driver_state_renderer = cast(Any, DriverStateRendererBP(DMIconStyle.COMMA_3X))
     self._battery_gauge_bp = HybridBatteryGauge()
     self._power_flow_gauge = PowerFlowGauge()
     self._battery_gauge_arched = HybridBatteryGaugeArched()
@@ -119,10 +120,10 @@ class AugmentedRoadViewBP(CameraViewBP, AugmentedRoadView, BlindspotRendererMixi
     self._auto_cal_bars = AutoCalBars(scale=AUTO_CAL_SCALE)
     self._last_auto_cal_poll = 0.0
 
-  def update_fade_out_bottom_overlay(self, _content_rect):
+  def update_fade_out_bottom_overlay(self, _content_rect: rl.Rectangle) -> None:
     """BluePilot: Skip MICI fade overlay on TICI — causes unwanted black gradient at bottom."""
 
-  def _render(self, rect):
+  def _render(self, rect: rl.Rectangle) -> None:
     """Override render to add blindspot, gauges, confidence ball on left."""
     bp_ui_log.tick()
     if not ui_state.started:
@@ -216,7 +217,7 @@ class AugmentedRoadViewBP(CameraViewBP, AugmentedRoadView, BlindspotRendererMixi
     self._draw_blindspot_screen_edges(self._content_rect, self.BLIND_SPOT_WIDTH)
 
     # BluePilot: Render HUD, driver state before gauges and alerts
-    self._hud_renderer.set_gradient_rect(self._content_rect)
+    cast(Any, self._hud_renderer).set_gradient_rect(self._content_rect)
     self._hud_renderer.render(ui_rect)
 
     bp_ui_log.scissor("AugRoadView", "reset (defensive)")
@@ -272,7 +273,7 @@ class AugmentedRoadViewBP(CameraViewBP, AugmentedRoadView, BlindspotRendererMixi
     if not self._hide_onroad_border:
       self._draw_border(rect)
 
-  def _render_rad_racer_scene(self, rect: rl.Rectangle):
+  def _render_rad_racer_scene(self, rect: rl.Rectangle) -> None:
     """Render the full Rad Racer 8-bit scene: skyline, road, sprites, gauge cluster.
 
     Called from _render with scissor mode already active on content_rect; ends
@@ -281,7 +282,7 @@ class AugmentedRoadViewBP(CameraViewBP, AugmentedRoadView, BlindspotRendererMixi
     content_rect = self._content_rect
 
     # Sky/signs project car-space points before the model road is rendered.
-    self.model_renderer.prepare_projection(content_rect)
+    cast(Any, self.model_renderer).prepare_projection(content_rect)
 
     # Sky, stars, skyline, roadside signs (behind the road)
     self._rad_racer_theme.render_background(content_rect, self.model_renderer)

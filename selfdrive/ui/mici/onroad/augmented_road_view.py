@@ -17,6 +17,7 @@ from openpilot.common.filter_simple import BounceFilter
 from openpilot.common.transformations.camera import DEVICE_CAMERAS, DeviceCameraConfig, view_frame_from_device_frame
 from openpilot.common.transformations.orientation import rot_from_euler
 from enum import IntEnum
+from collections.abc import Callable
 
 if gui_app.sunnypilot_ui():
   from openpilot.selfdrive.ui.sunnypilot.mici.onroad.hud_renderer import HudRendererSP as HudRenderer
@@ -133,7 +134,8 @@ class BookmarkIcon(Widget):
 
 
 class AugmentedRoadView(CameraView):
-  def __init__(self, bookmark_callback=None, stream_type: VisionStreamType = VisionStreamType.VISION_STREAM_ROAD):
+  def __init__(self, bookmark_callback: Callable[[], None] | None = None,
+               stream_type: VisionStreamType = VisionStreamType.VISION_STREAM_ROAD) -> None:
     super().__init__("camerad", stream_type)
     self._bookmark_callback = bookmark_callback
     self._set_placeholder_color(rl.BLACK)
@@ -166,7 +168,7 @@ class AugmentedRoadView(CameraView):
     """Check if currently swiping left (for scroller to disable)."""
     return self._bookmark_icon.is_swiping_left()
 
-  def _update_state(self):
+  def _update_state(self) -> None:
     super()._update_state()
 
     # update offroad label

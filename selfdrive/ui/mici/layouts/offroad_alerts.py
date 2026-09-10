@@ -252,10 +252,13 @@ class MiciOffroadAlerts(Scroller):
 
   def _refresh(self) -> int:
     """Refresh alerts from params and return active count."""
+    pending_params = self._pending_params
+    if pending_params is None:
+      return 0
     active_count = 0
 
     # Handle UpdateAvailable alert specially
-    update_available = self._pending_params["UpdateAvailable"]
+    update_available = pending_params["UpdateAvailable"]
     update_alert_data = next((alert_data for alert_data in self.sorted_alerts if alert_data.key == "UpdateAvailable"), None)
 
     if update_alert_data:
@@ -263,7 +266,7 @@ class MiciOffroadAlerts(Scroller):
         version_string = ""
 
         # Get new version description and parse version and date
-        new_desc = self._pending_params["UpdaterNewDescription"] or ""
+        new_desc = pending_params["UpdaterNewDescription"] or ""
         if new_desc:
           # format: "version / branch / commit / date"
           parts = new_desc.split(" / ")
@@ -284,14 +287,14 @@ class MiciOffroadAlerts(Scroller):
         continue  # Skip, already handled above
 
       text = ""
-      alert_json = self._pending_params[alert_data.key]
+      alert_json = pending_params[alert_data.key]
 
       if alert_json:
         text = alert_json.get("text", "").replace("%1", alert_json.get("extra", ""))
 
       if text and not alert_data.visible:
         # Bump newly visible alerts to the top, severity sort keeps it at the top of its category
-        widget = next(w for w in self._scroller.items if w.alert_data is alert_data)
+        widget = next(w for w in self._scroller.items if isinstance(w, AlertItem) and w.alert_data is alert_data)
         self._scroller.items.remove(widget)
         self._scroller.items.insert(0, widget)
       alert_data.text = text
@@ -304,7 +307,7 @@ class MiciOffroadAlerts(Scroller):
     for alert_item in self.alert_items:
       alert_item.update_alert_data(alert_item.alert_data)
 
-    self._scroller.items.sort(key=lambda w: -w.alert_data.severity)
+    self._scroller.items.sort(key=lambda w: -w.alert_data.severity if isinstance(w, AlertItem) else 0)
 
     return active_count
 

@@ -21,7 +21,7 @@ PAD = 10
 
 
 class LiveDelayIndicator:
-  def __init__(self, width: int = 64):
+  def __init__(self, width: int = 64) -> None:
     self.width = width
     self.height = round(width * ICON_ASPECT)
     self._icon = gui_app.texture("icons/liveDelay.png", width, self.height)
@@ -52,7 +52,7 @@ class LiveDelayIndicator:
     rl.draw_texture_ex(self._icon, rl.Vector2(x, y), 0.0, 1.0, ACTIVE if sm['carState'].vEgo >= MIN_VEGO else IDLE)
 
 
-def demo():
+def demo() -> None:
   ind = LiveDelayIndicator(width=64)
   assert ind.height == 45
   assert MIN_VEGO > 0

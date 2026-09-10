@@ -53,7 +53,7 @@ class DriverCameraSetupDialog(BaseDriverCameraDialog):
 
 
 class TrainingGuidePreDMTutorial(NavScroller):
-  def __init__(self, continue_callback: Callable[[], None]):
+  def __init__(self, continue_callback: Callable[[], None]) -> None:
     super().__init__()
 
     continue_button = BigPillButton("next")
@@ -215,14 +215,14 @@ class TrainingGuideDMTutorial(NavWidget):
 
 
 class TrainingGuideRecordFront(NavScroller):
-  def __init__(self, continue_callback: Callable[[], None]):
+  def __init__(self, continue_callback: Callable[[], None]) -> None:
     super().__init__()
 
-    def on_accept():
+    def on_accept() -> None:
       ui_state.params.put_bool("RecordFront", True)
       continue_callback()
 
-    def on_decline():
+    def on_decline() -> None:
       ui_state.params.put_bool("RecordFront", False)
       continue_callback()
 
@@ -242,7 +242,7 @@ class TrainingGuideRecordFront(NavScroller):
 
 
 class TrainingGuideAttentionNotice(Scroller):
-  def __init__(self, continue_callback: Callable[[], None]):
+  def __init__(self, continue_callback: Callable[[], None]) -> None:
     super().__init__()
 
     continue_button = BigPillButton("next")
@@ -313,7 +313,7 @@ class QRCodeWidget(Widget):
 
 
 class TermsPage(Scroller):
-  def __init__(self, on_accept, on_decline):
+  def __init__(self, on_accept: Callable[[], None], on_decline: Callable[[], None]) -> None:
     super().__init__()
 
     self._accept_button = BigConfirmationCircleButton("accept\nterms", gui_app.texture("icons_mici/setup/driver_monitoring/dm_check.png", 64, 64), on_accept)

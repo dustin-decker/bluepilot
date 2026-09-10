@@ -222,12 +222,12 @@ class SunnylinkLayout(Widget):
       self._sunnylink_pairing_dialog = SunnylinkPairingDialog(sponsor_pairing)
       gui_app.push_widget(self._sunnylink_pairing_dialog)
 
-  def _handle_backup_btn(self):
+  def _handle_backup_btn(self) -> None:
     backup_dialog = ConfirmDialog(text=tr("Are you sure you want to backup your current bluepilot settings?"), confirm_text="Backup",
                                   callback=self._backup_handler)
     gui_app.push_widget(backup_dialog)
 
-  def _handle_restore_btn(self):
+  def _handle_restore_btn(self) -> None:
     self._restore_btn.set_enabled(False)
     restore_dialog = ConfirmDialog(text=tr("Are you sure you want to restore the last backed up bluepilot settings?"),
                                    confirm_text="Restore", callback=self._restore_handler)

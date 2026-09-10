@@ -10,6 +10,7 @@ Status is parsed only when it changes (~1 Hz), off a conflated socket, so the wi
 handful of rectangles per frame — cheap on the UI process.
 """
 import json
+from typing import Any
 
 import pyray as rl
 
@@ -20,7 +21,6 @@ try:
   import cereal.messaging as _messaging
   _STATUS_SOCK = _messaging.sub_sock("controllerStateBP", conflate=True, timeout=0)
 except Exception:  # PC/dev hosts without cereal sockets: gauges stay hidden
-  _messaging = None
   _STATUS_SOCK = None
 
 _BLUE = (77, 163, 255)
@@ -48,7 +48,7 @@ def poll_status() -> str | None:
   return str(msg.controllerStateBP.bmsAngleAutoCalState)
 
 
-def band_fill(band_st: dict, was_full: bool) -> tuple[float, bool]:
+def band_fill(band_st: dict[str, Any], was_full: bool) -> tuple[float, bool]:
   """Monotonic 'progress toward calibrated' fill (0..1) for one band, plus the new
   latched-full state. Pure, so it is unit-tested directly. 'good' latches full and stays
   full through borderline good/propose flicker; a fresh 'verify' step or a 'collect' reset
@@ -77,13 +77,13 @@ class AutoCalBars(Widget):
   WIDTH = _BATT_W + 8
   HEIGHT = 2 * _ROW_PITCH
 
-  def __init__(self, scale: float = 1.0):
+  def __init__(self, scale: float = 1.0) -> None:
     super().__init__()
     if scale <= 0:
       raise ValueError("scale must be positive")
     self._scale = float(scale)
-    self._raw = None
-    self._st = None                        # dict (armed JSON) | "locked" | None
+    self._raw: str | None = None
+    self._st: dict[str, Any] | str | None = None  # dict (armed JSON) | "locked" | None
     self._full = {"low": False, "high": False}  # latched-full state per band (hysteresis)
 
   @property
@@ -94,14 +94,14 @@ class AutoCalBars(Widget):
   def render_height(self) -> int:
     return round(self.HEIGHT * self._scale)
 
-  def update_status(self, status: str | None):
+  def update_status(self, status: str | None) -> None:
     if status is None or status == self._raw:
       return
     self._raw = status
     if status.startswith("{"):
       try:
         d = json.loads(status)
-        self._st = d if ("low" in d and "high" in d) else None
+        self._st = d if isinstance(d, dict) and "low" in d and "high" in d else None
       except ValueError:
         self._st = None
     elif status == "locked":
@@ -123,10 +123,11 @@ class AutoCalBars(Widget):
     return self._st == "locked"
 
   def _fill(self, band: str) -> float:
+    assert isinstance(self._st, dict)
     fill, self._full[band] = band_fill(self._st.get(band, {}), self._full[band])
     return fill
 
-  def _draw_battery(self, x: int, y: int, fill: float, rgb):
+  def _draw_battery(self, x: int, y: int, fill: float, rgb: tuple[int, int, int]) -> None:
     batt_w = round(_BATT_W * self._scale)
     batt_h = round(_BATT_H * self._scale)
     nub_w = round(_NUB_W * self._scale)
@@ -142,7 +143,7 @@ class AutoCalBars(Widget):
       rl.draw_rectangle(x + pad, body_y + batt_h - pad - fh, batt_w - 2 * pad, fh, col)
     rl.draw_rectangle_rounded_lines_ex(body, 0.25, 6, 1.5 * self._scale, rl.Color(150, 155, 165, 200))
 
-  def _draw_lock(self, x: int, y: int, rgb):
+  def _draw_lock(self, x: int, y: int, rgb: tuple[int, int, int]) -> None:
     batt_w = round(_BATT_W * self._scale)
     batt_h = round(_BATT_H * self._scale)
     nub_h = round(_NUB_H * self._scale)
@@ -156,7 +157,7 @@ class AutoCalBars(Widget):
     rl.draw_rectangle_rounded(body, 0.3, 6, col)
     rl.draw_circle(int(cx), body_y + body_h // 2, 2.5 * self._scale, rl.Color(20, 22, 28, 255))  # keyhole
 
-  def _render(self, rect: rl.Rectangle):
+  def _render(self, rect: rl.Rectangle) -> None:
     if self._st is None:
       return
     font = gui_app.font(FontWeight.NORMAL)
