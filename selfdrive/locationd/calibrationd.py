@@ -269,6 +269,7 @@ def main() -> NoReturn:
 
   calibrator = Calibrator(param_put=True)
   calibrator.not_car = CP.notCar
+  last_input_health = None
 
   while 1:
     timeout = 0 if sm.frame == -1 else 100
@@ -288,7 +289,18 @@ def main() -> NoReturn:
 
     # 4Hz driven by cameraOdometry
     if sm.frame % 5 == 0:
-      calibrator.send_data(pm, sm.all_checks())
+      # BluePilot: capture which upstream check keeps liveCalibration invalid.
+      input_health = {
+        "invalid": [s for s in sm.services if not sm.valid[s]],
+        "not_alive": [s for s in sm.services if not sm.alive[s]],
+        "not_freq_ok": [s for s in sm.services if not sm.freq_ok[s]],
+      }
+      inputs_valid = sm.all_checks()
+      if input_health != last_input_health:
+        cloudlog.event("calibrationd_input_health", error=not inputs_valid, **input_health)
+        last_input_health = input_health
+      # End BluePilot
+      calibrator.send_data(pm, inputs_valid)
 
 
 if __name__ == "__main__":
