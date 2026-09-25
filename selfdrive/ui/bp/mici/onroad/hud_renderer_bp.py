@@ -17,7 +17,6 @@ from openpilot.selfdrive.ui.bp.lib.ui_debug_logger import bp_ui_log
 # BluePilot: seasonal theme packs (steering wheel icon override)
 from openpilot.selfdrive.ui.bp.lib import theme_pack
 from openpilot.selfdrive.ui.bp.lib.live_delay_indicator import LiveDelayIndicator
-from openpilot.selfdrive.ui.bp.lib.learned_stops import StopIndicator
 from openpilot.system.ui.lib.text_measure import measure_text_cached
 from openpilot.system.ui.lib.application import gui_app
 from openpilot.bluepilot.ui.lib.bp_shaders import draw_shader_circle_gradient
@@ -35,7 +34,6 @@ class MiciHudRendererBP(HudRenderer):
     self._torque_bar = TorqueBar()
     self._bp_params = Params()
     self._live_delay = LiveDelayIndicator(width=44)
-    self._stops = StopIndicator()
     self._brakes_on = False
     self._power_flow = MiciPowerflowGauge()
     self._txt_wheel_comma_3x = gui_app.texture("icons/chffr_wheel.png", self._txt_wheel.width, self._txt_wheel.height)
@@ -88,7 +86,6 @@ class MiciHudRendererBP(HudRenderer):
       self._draw_set_speed(rect)
 
     self._draw_steering_wheel(rect)
-    self._stops.render(rect, compact=True)
 
     # Steering-lag calibration status, top-right corner
     self._live_delay.render(rect.x + rect.width - self._live_delay.width - 14, rect.y + 14)

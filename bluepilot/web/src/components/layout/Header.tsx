@@ -26,7 +26,6 @@ export const Header = ({
   const getTitle = () => {
     if (location.pathname === '/') return 'BluePilot'
     if (isRoutesPage) return 'Routes'
-    if (location.pathname === '/learned-stops') return 'Learned Stops'
     if (location.pathname.startsWith('/parameters')) return 'Parameters'
     if (location.pathname.startsWith('/logs')) return 'System Logs'
     if (location.pathname.startsWith('/settings')) return 'Settings'

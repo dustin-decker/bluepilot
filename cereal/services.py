@@ -97,7 +97,6 @@ _services: dict[str, tuple] = {
 
   # BluePilot: controllerStateBP (lateral uncertainty) + carStateBP (hybrid drive)
   "controllerStateBP": (True, 100., 10),
-  "learnedStopsBP": (True, 10., 10),  # BluePilot: auditable learned-stop target
   "carStateBP": (True, 100., 10),
 
   # debug

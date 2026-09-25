@@ -18,10 +18,6 @@ Reproduced overlapping lateral controls after opening descriptions and reopening
 
 Added/modified Python functions are checked against the `bp-dev-models` shared base, with a clean strict subset and native Params API regression probes. Dynamic Cereal/JSON/UI boundaries remain explicit; this is not a claim that inherited Python is globally strict. Native process import tests catch annotations that cannot be evaluated by Cap'n Proto at runtime.
 
-The Learned Stops recorder caches its library, rejects distant paths before exact matching, matches only for its 10 Hz publications, and reuses decoded messages while checking freshness on every car-state sample. It drains unconflated inputs in 50 ms batches; brief events and frame indices are retained. Stationary retention is bounded after emitting an observation. No steering gains, calibration values or automatic stopping behavior change.
-
-Exact replay of the later stopping segments preserves 852 publications and three observations. A local native-binding replay used 13.9× less recorder-loop CPU, excluding IPC. End-to-end native messaging measurements on the device show a smaller improvement; do not present loop timing as total device savings. Replay is not physical driving validation, and the 10× end-to-end target is not established by these results.
-
 ## Historical validation before removal
 
 Experimental branch on Dustin's fork; checked 2026-09-06. This is not a driving-safety certification.
@@ -215,25 +211,3 @@ calibration at 0% is a separate issue and is not fixed by enabling Ford autocal.
 ### Removal validation
 
 The restored AutoCal/lateral/replay CPU suite passes: 105 tests and seven subtests (2026-09-07). The local run uses the existing external messaging shim because this checkout lacks native msgq; device validation is recorded separately. The angle strategy, gain constants, and estimator match the pre-PR integration exactly; the lifecycle additionally rejects retune-version locks.
-
-### Learned Stops: Observe rollout (2026-09-08)
-
-Observe records human stopping approaches and displays matched locations without applying a stopping constraint. Control is hard-disabled. Sign confirmation, three independent eligible drives, positioning quality and explicit approach approval are separate gates; imports retain exported verification and approval decisions while recalculating readiness from the evidence.
-
-Validation: 32 observation/storage/API/native-MPC checks passed; Off and Observe produce identical native MPC outputs with successful solves in a steady-cruise scenario. A closer radar lead retains its stronger constraint. Native TICI/MICI visual checks cover 24 component screenshots, and Portal desktop/mobile checks cover evidence review, disabled Control and overflow. TypeScript checking and the production web build pass. Cursor Fable 5.1 adversarial review identified the shared Portal driving-key typo; the corrected guard uses `IsOnroad` and fails closed.
-
-Retrospective replay covered 300 full rlog segments across 10 routes (1,739,125 samples): 36 recorded stops, 31 locations, zero qualified approaches. Exclusions overlap: 26 queue stops, 12 nonmanual stops and three maneuvers. Three full-resolution evidence frames were recovered with less than five milliseconds of timestamp alignment error.
-
-Diagnostic 10–70 mph simulations stop and hold without overshooting, but the 0.3-second plant stops approximately 2.6–32.1 metres early. This is not acceptable reference accuracy. An initial accelerating-cruise fixture also produced identical solver resets in both baseline and Observe; it was replaced by a coherent steady-cruise equivalence case, not treated as a successful solve. The diagnostic plant is not an identified Ford brake-response model. No physical stopping accuracy, 70 mph automatic stopping, or public-road Control validation is claimed.
-
-The conservative localization-age displacement bound can exceed the two-metre Control uncertainty budget at highway speed. High-rate/time-aligned localization and measured uncertainty must be validated before Control can be enabled. Follow-up review also corrected transient SQLite capture recovery and released evidence locks before HTTP backup streaming.
-
-The full 15-case delay sweep (0.1/0.3/0.6 seconds) records no solver failures but reaches 59.1 metres early at 70 mph / 0.6 seconds.
-
-Device validation: the same 32 tests pass on the native comma runtime. The Portal guard additionally treats a missing or empty driving-state parameter as unavailable (blocked), with regression coverage for native typed and fallback values.
-
-Review-queue follow-up: 33 checks pass. Radar lead-distance queue flags now skip manual review, existing manual exclusions remain dismissed after reload, and fresh observations reopen an approach for review. Browser checks cover one-click exclusion reasons, advancement within an approach and to the next approach, failed saves, an empty queue and retained excluded history on mobile. The queue heuristic uses a lead within 25 metres during the final three seconds; it is conservative evidence filtering, not proof of a stationary lead or absence of a stop sign.
-
-Import round-trip follow-up: 35 checks pass, covering retained confirmations/approvals, reference-ID remapping, exclusions/disabled state, repeat imports without duplicate visits, recomputed positioning readiness and unchanged mode. Imports roll back if driving begins or an exported reference conflicts with saved evidence. JSON file references are not followed; the ZIP backup remains the way to retain image files.
-
-On-device engagement regression: the planner adapter used a removed Params method and the recorder passed structured fields to plain logger methods. Use asynchronous `Params.put(..., block=False)` and supported structured logging. All 37 Learned Stops checks pass on the host and native device, including Off/Observe planner updates with real isolated Params; the structured logging call sites were also exercised. Physical engagement still requires a subsequent drive.

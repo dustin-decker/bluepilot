@@ -316,8 +316,8 @@ class LongitudinalMpc:
     lead_xv = self.extrapolate_lead(x_lead, v_lead, a_lead, a_lead_tau)
     return lead_xv
 
-  def update(self, radarstate: Any, v_cruise: float, personality: log.LongitudinalPersonality = log.LongitudinalPersonality.standard,
-             stop_distance: float | None = None) -> None:
+  def update(self, radarstate: Any, v_cruise: float,
+             personality: log.LongitudinalPersonality = log.LongitudinalPersonality.standard) -> None:
     t_follow = get_T_FOLLOW(personality)
     v_ego = self.x0[1]
     self.status = radarstate.leadOne.status or radarstate.leadTwo.status
@@ -341,15 +341,6 @@ class LongitudinalMpc:
 
     x_obstacles = np.column_stack([lead_0_obstacle, lead_1_obstacle, cruise_obstacle])
     self.source = MPC_SOURCES[np.argmin(x_obstacles[0])]
-    # BluePilot: account for the existing standstill gap once, without a fake radar lead.
-    if stop_distance is not None:
-      if not np.isfinite(stop_distance) or stop_distance < 0:
-        raise ValueError("Invalid stop distance")
-      obstacle = stop_distance + STOP_DISTANCE
-      if obstacle < np.min(x_obstacles[0]):
-        self.source = LongitudinalPlanSource.learnedStop
-      x_obstacles = np.column_stack([x_obstacles, np.full(N + 1, obstacle)])
-    # End BluePilot
 
     self.yref[:,:] = 0.0
     for i in range(N):
@@ -377,9 +368,6 @@ class LongitudinalMpc:
     self.solver.constraints_set(0, "ubx", self.x0)
 
     self.solution_status = self.solver.solve()
-    # BluePilot: retain solver failures for stop-assistance diagnostics across reset().
-    self.last_solve_status = self.solution_status
-    # End BluePilot
     self.solve_time = float(self.solver.get_stats('time_tot')[0])
     self.time_qp_solution = float(self.solver.get_stats('time_qp')[0])
     self.time_linearization = float(self.solver.get_stats('time_lin')[0])

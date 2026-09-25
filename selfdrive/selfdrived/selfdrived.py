@@ -159,10 +159,6 @@ class SelfdriveD(CruiseHelper):
     self.rk = Ratekeeper(100, print_delay_threshold=None)
 
     self.ignored_processes = {'mapd', }
-    # BluePilot: optional stop observation/evidence must not disengage ordinary
-    # driving. The planner handles stale stop messages and retains any active hold.
-    self.ignored_processes.update({'bp_learned_stops', 'bp_stop_evidence'})
-    # End BluePilot
 
     # Determine startup event
     is_remote = build_metadata.openpilot.comma_remote or build_metadata.openpilot.sunnypilot_remote

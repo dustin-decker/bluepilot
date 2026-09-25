@@ -897,15 +897,11 @@ class WebRoutesHandler(BaseHTTPRequestHandler):
 
             # SPA routes - serve index.html for frontend routes
             # This allows direct navigation and page refresh to work
-            SPA_ROUTES = {'/', '/index.html', '/settings', '/parameters', '/routes', '/logs', '/learned-stops'}
+            SPA_ROUTES = {'/', '/index.html', '/settings', '/parameters', '/routes', '/logs'}
 
             # Route handlers
             if path in SPA_ROUTES or path.startswith('/settings/'):
                 self.send_file_response(str(WEBAPP_DIR / 'index.html'), 'text/html')
-                return
-
-            from bluepilot.learned_stops.api import handle as handle_learned_stops
-            if handle_learned_stops(self, path, 'GET', is_onroad):
                 return
 
             # API routes - separate if/elif chain since SPA routes return early
@@ -2899,10 +2895,6 @@ class WebRoutesHandler(BaseHTTPRequestHandler):
                         'reason': 'safety'
                     }, 503)
                     return
-
-            from bluepilot.learned_stops.api import handle as handle_learned_stops
-            if handle_learned_stops(self, path, 'POST', is_onroad):
-                return
 
             # Cancel export operations
             if path.startswith('/api/route-export/') and path.endswith('/cancel'):

@@ -10,8 +10,8 @@ def main() -> None:
   imports = 'from openpilot.common.params import Params\nfrom openpilot.common.swaglog import cloudlog\n'
   cases = {
     'valid asynchronous write and structured logging': (
-      'Params().put("BPLearnedStopsLatch", "{}", block=False)\ncloudlog.event("observation", id="test")', None),
-    'removed Params API': ('Params().put_nonblocking("BPLearnedStopsLatch", "{}")', '[attr-defined]'),
+      'Params().put("CurrentRoute", "route", block=False)\ncloudlog.event("observation", id="test")', None),
+    'removed Params API': ('Params().put_nonblocking("CurrentRoute", "route")', '[attr-defined]'),
     'plain info with structured keywords': ('cloudlog.info("observation", id="test")', '[call-arg]'),
     'plain warning with structured keywords': ('cloudlog.warning("evidence", failures=[])', '[call-arg]'),
     'typed IsOnroad mistaken for bytes': ('value: bytes = Params().get("IsOnroad")', '[assignment]'),

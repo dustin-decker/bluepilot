@@ -113,15 +113,6 @@ EVENTS_SP: dict[int, dict[str, Alert | AlertCallbackType]] = {
       Priority.LOW, VisualAlert.none, AudibleAlert.none, 1.),
   },
 
-  # BluePilot: a missing stop position must not silently release latched braking.
-  EventNameSP.learnedStopTakeover: {
-    ET.WARNING: Alert(
-      "Take Control", "Learned stop position unavailable",
-      AlertStatus.userPrompt, AlertSize.mid,
-      Priority.HIGH, VisualAlert.fcw, AudibleAlert.warningImmediate, 1.),
-  },
-  # End BluePilot
-
   EventNameSP.silentLkasEnable: {
     ET.ENABLE: EngagementAlert(AudibleAlert.none),
   },
